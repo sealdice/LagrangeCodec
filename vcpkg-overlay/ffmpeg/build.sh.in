@@ -92,7 +92,7 @@ OSX_ARCH_COUNT=0@OSX_ARCH_COUNT@
 
 if [ "@VCPKG_CMAKE_SYSTEM_NAME@" = "Android" ]; then
     OPTIONS_arm=" --disable-asm --disable-x86asm"
-    OPTIONS_arm64=" --disable-asm --disable-x86asm"
+    OPTIONS_arm64=" --enable-asm --disable-x86asm"
     OPTIONS_x86=" --disable-asm --disable-x86asm"
     OPTIONS_x86_64="${OPTIONS_x86}"
 elif [ "@VCPKG_TARGET_IS_MINGW@" = "ON" ]; then
