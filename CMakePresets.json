@@ -96,6 +96,36 @@
             }
         },
         {
+            "name": "clang-arm64-android-static-debug",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build-android-debug",
+            "cacheVariables": {
+                "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+                "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "$env{ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake",
+                "CMAKE_SYSTEM_NAME": "Android",
+                "ANDROID_ABI": "arm64-v8a",
+                "ANDROID_PLATFORM": "21",
+                "ANDROID_STL": "c++_static",
+                "CMAKE_BUILD_TYPE": "Debug",
+                "VCPKG_TARGET_TRIPLET": "arm64-android"
+            }
+        },
+        {
+            "name": "clang-arm64-android-static-release",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build-android-release",
+            "cacheVariables": {
+                "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+                "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "$env{ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake",
+                "CMAKE_SYSTEM_NAME": "Android",
+                "ANDROID_ABI": "arm64-v8a",
+                "ANDROID_PLATFORM": "21",
+                "ANDROID_STL": "c++_static",
+                "CMAKE_BUILD_TYPE": "Release",
+                "VCPKG_TARGET_TRIPLET": "arm64-android"
+            }
+        },
+        {
             "name": "clang-x64-osx-static-debug",
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/build-linux-debug",
