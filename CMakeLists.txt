@@ -7,7 +7,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # Default builds keep producing the shared library as before. Static builds are
 # used by the dedicated CI workflow (and by consumers who want a .a archive).
 option(LAGRANGECODEC_BUILD_SHARED "Build LagrangeCodec as a shared library" ON)
-if (LINUX)
+if (LINUX AND NOT ANDROID)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wl,-Bsymbolic")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wl,-Bsymbolic")
 endif()
@@ -64,6 +64,10 @@ target_sources(LagrangeCodec PRIVATE ${SILK_SRC_FILES})
 target_include_directories(LagrangeCodec PUBLIC ${FFMPEG_INCLUDE_DIRS})
 target_link_directories(LagrangeCodec PUBLIC ${FFMPEG_LIBRARY_DIRS})
 target_link_libraries(LagrangeCodec PUBLIC ${FFMPEG_LIBRARIES} ZLIB::ZLIB)
+
+if (ANDROID)
+    target_link_libraries(LagrangeCodec PUBLIC m log dl atomic android)
+endif()
 
 include(CTest)
 if (BUILD_TESTING)

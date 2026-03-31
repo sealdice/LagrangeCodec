@@ -231,6 +231,7 @@ jobs:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
           set -o pipefail
+          mkdir -p build
           export VCPKG_ROOT="/usr/local/share/vcpkg"
           export PATH="$VCPKG_ROOT:$PATH"
           cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DVCPKG_BUILD_TYPE=release -DLAGRANGECODEC_BUILD_SHARED=OFF --preset clang-arm64-android-static-release -S . -B build 2>&1 | tee build/android-configure.log
