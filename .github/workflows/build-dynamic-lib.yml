@@ -120,37 +120,6 @@ jobs:
           name: libLagrangeCodec.arm64.so
           path: build/libLagrangeCodec.so
 
-  build-android-arm64:
-    runs-on: ubuntu-22.04
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Toolchains
-        run: |
-          sudo apt-get update && sudo apt install build-essential cmake ninja-build nasm -y
-
-      - name: Setup Android NDK
-        id: setup-ndk
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: r27c
-
-      - name: Build LagrangeCodec
-        env:
-          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
-        run: |
-          export VCPKG_ROOT="/usr/local/share/vcpkg"
-          export PATH="$VCPKG_ROOT:$PATH"
-          cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF --preset clang-arm64-android-static-release -S . -B build
-          cmake --build build
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: libLagrangeCodec.android.arm64.so
-          path: build/libLagrangeCodec.so
-
   build-macos-amd64:
     runs-on: macos-latest
 
