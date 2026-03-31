@@ -64,9 +64,26 @@ target_sources(LagrangeCodec PRIVATE ${SILK_SRC_FILES})
 target_include_directories(LagrangeCodec PUBLIC ${FFMPEG_INCLUDE_DIRS})
 target_link_directories(LagrangeCodec PUBLIC ${FFMPEG_LIBRARY_DIRS})
 if (ANDROID)
+    set(ffmpeg_android_link_libraries "")
+    set(use_ffmpeg_link_item ON)
+    foreach(item IN LISTS FFMPEG_LIBRARIES)
+        if (item STREQUAL "optimized" OR item STREQUAL "general")
+            set(use_ffmpeg_link_item ON)
+            continue()
+        endif()
+        if (item STREQUAL "debug")
+            set(use_ffmpeg_link_item OFF)
+            continue()
+        endif()
+        if (use_ffmpeg_link_item)
+            list(APPEND ffmpeg_android_link_libraries "${item}")
+        endif()
+        set(use_ffmpeg_link_item ON)
+    endforeach()
+
     target_link_libraries(LagrangeCodec PUBLIC
         -Wl,--start-group
-        ${FFMPEG_LIBRARIES}
+        ${ffmpeg_android_link_libraries}
         ZLIB::ZLIB
         m
         log
