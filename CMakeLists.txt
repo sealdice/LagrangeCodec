@@ -4,6 +4,10 @@ project(LagrangeCodec)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+if (ANDROID)
+    set(CMAKE_NINJA_FORCE_RESPONSE_FILE ON)
+endif()
+
 # Default builds keep producing the shared library as before. Static builds are
 # used by the dedicated CI workflow (and by consumers who want a .a archive).
 option(LAGRANGECODEC_BUILD_SHARED "Build LagrangeCodec as a shared library" ON)

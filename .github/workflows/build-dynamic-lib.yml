@@ -161,6 +161,14 @@ jobs:
           if [ -f build/android-build.log ]; then
             BUILD_MAIN_TAIL=$(tail -n 40 build/android-build.log | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
             echo "::error title=android build log::$BUILD_MAIN_TAIL"
+            sed -n '/^FAILED:/,$p' build/android-build.log | tail -n 120 > build/android-build-errors.log || true
+            if [ -s build/android-build-errors.log ]; then
+              split -l 20 -d -a 2 build/android-build-errors.log build/android-build-errors-part-
+              for part in build/android-build-errors-part-*; do
+                PART_CONTENT=$(sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g' "$part")
+                echo "::error title=android build errors $(basename "$part")::$PART_CONTENT"
+              done
+            fi
           fi
           if [ -f /usr/local/share/vcpkg/buildtrees/ffmpeg/arm64-android-rel/ffbuild/config.log ]; then
             CONFIG_TAIL=$(tail -n 40 /usr/local/share/vcpkg/buildtrees/ffmpeg/arm64-android-rel/ffbuild/config.log | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
