@@ -63,10 +63,20 @@ target_sources(LagrangeCodec PRIVATE ${SILK_SRC_FILES})
 
 target_include_directories(LagrangeCodec PUBLIC ${FFMPEG_INCLUDE_DIRS})
 target_link_directories(LagrangeCodec PUBLIC ${FFMPEG_LIBRARY_DIRS})
-target_link_libraries(LagrangeCodec PUBLIC ${FFMPEG_LIBRARIES} ZLIB::ZLIB)
-
 if (ANDROID)
-    target_link_libraries(LagrangeCodec PUBLIC m log dl atomic android)
+    target_link_libraries(LagrangeCodec PUBLIC
+        -Wl,--start-group
+        ${FFMPEG_LIBRARIES}
+        ZLIB::ZLIB
+        m
+        log
+        dl
+        atomic
+        android
+        -Wl,--end-group
+    )
+else()
+    target_link_libraries(LagrangeCodec PUBLIC ${FFMPEG_LIBRARIES} ZLIB::ZLIB)
 endif()
 
 include(CTest)
