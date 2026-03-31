@@ -6,6 +6,7 @@
         {
             "name": "ffmpeg",
             "version>=": "5.0.0",
+            "default-features": false,
             "features": [
                 "gpl",
                 "version3",

@@ -230,10 +230,35 @@ jobs:
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
+          set -o pipefail
           export VCPKG_ROOT="/usr/local/share/vcpkg"
           export PATH="$VCPKG_ROOT:$PATH"
-          cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DVCPKG_BUILD_TYPE=release -DLAGRANGECODEC_BUILD_SHARED=OFF --preset clang-arm64-android-static-release -S . -B build
-          cmake --build build
+          cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DVCPKG_BUILD_TYPE=release -DLAGRANGECODEC_BUILD_SHARED=OFF --preset clang-arm64-android-static-release -S . -B build 2>&1 | tee build/android-configure.log
+          cmake --build build 2>&1 | tee build/android-build.log
+
+      - name: Dump Android build logs on failure
+        if: failure()
+        run: |
+          test -f build/android-configure.log && tail -n 200 build/android-configure.log || true
+          test -f build/android-build.log && tail -n 200 build/android-build.log || true
+          test -f build/vcpkg-manifest-install.log && tail -n 300 build/vcpkg-manifest-install.log || true
+          find /usr/local/share/vcpkg/buildtrees/ffmpeg -type f \( -name "*.log" -o -path "*/ffbuild/config.log" \) -print -exec tail -n 300 {} \; || true
+          if [ -f build/android-configure.log ]; then
+            CFG_TAIL=$(tail -n 40 build/android-configure.log | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
+            echo "::error title=android configure log::$CFG_TAIL"
+          fi
+          if [ -f build/android-build.log ]; then
+            BUILD_MAIN_TAIL=$(tail -n 40 build/android-build.log | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
+            echo "::error title=android build log::$BUILD_MAIN_TAIL"
+          fi
+          if [ -f /usr/local/share/vcpkg/buildtrees/ffmpeg/arm64-android-rel/ffbuild/config.log ]; then
+            CONFIG_TAIL=$(tail -n 40 /usr/local/share/vcpkg/buildtrees/ffmpeg/arm64-android-rel/ffbuild/config.log | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
+            echo "::error title=ffmpeg arm64 android config.log::$CONFIG_TAIL"
+          fi
+          if [ -f /usr/local/share/vcpkg/buildtrees/ffmpeg/build-arm64-android-rel-out.log ]; then
+            BUILD_TAIL=$(tail -n 40 /usr/local/share/vcpkg/buildtrees/ffmpeg/build-arm64-android-rel-out.log | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
+            echo "::error title=ffmpeg arm64 android build log::$BUILD_TAIL"
+          fi
 
       - name: Stage Static Link Bundle
         run: |

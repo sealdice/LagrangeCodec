@@ -73,25 +73,11 @@ set(OPTIONS "${OPTIONS} --enable-fft --enable-protocol=file --enable-bsf=h264_mp
 
 ### PATCH END!
 
-if(VCPKG_TARGET_ARCHITECTURE STREQUAL "arm")
-    set(OPTIONS "${OPTIONS} --disable-asm --disable-x86asm")
-elseif(VCPKG_TARGET_ARCHITECTURE STREQUAL "arm64")
-    set(OPTIONS "${OPTIONS} --enable-asm --disable-x86asm")
-elseif(VCPKG_TARGET_ARCHITECTURE STREQUAL "x86" OR VCPKG_TARGET_ARCHITECTURE STREQUAL "x64")
-    # MinGW builds have been observed to fail in FFmpeg's x86 asm on GitHub Actions
-    # (e.g. gas "operand type mismatch for `shr`"). Prefer C fallbacks for CI stability.
-    if(VCPKG_TARGET_IS_MINGW)
-        set(OPTIONS "${OPTIONS} --disable-asm --disable-x86asm")
-    else()
-        set(OPTIONS "${OPTIONS} --enable-asm --enable-x86asm")
-    endif()
-endif()
-
 if(VCPKG_TARGET_IS_WINDOWS)
     vcpkg_acquire_msys(MSYS_ROOT)
     set(SHELL "${MSYS_ROOT}/usr/bin/bash.exe")
 else()
-    set(SHELL /bin/sh)
+    find_program(SHELL bash)
 endif()
 
 if(VCPKG_TARGET_IS_MINGW)
@@ -115,6 +101,56 @@ endif()
 
 vcpkg_cmake_get_vars(cmake_vars_file)
 include("${cmake_vars_file}")
+
+if(VCPKG_CMAKE_SYSTEM_NAME STREQUAL "Android")
+    set(prog_env "")
+
+    if(VCPKG_DETECTED_CMAKE_C_COMPILER)
+        get_filename_component(CC_path "${VCPKG_DETECTED_CMAKE_C_COMPILER}" DIRECTORY)
+        get_filename_component(CC_filename "${VCPKG_DETECTED_CMAKE_C_COMPILER}" NAME)
+        set(ENV{CC} "${CC_filename}")
+        if(CC_path)
+            list(APPEND prog_env "${CC_path}")
+        endif()
+    endif()
+
+    if(VCPKG_DETECTED_CMAKE_NM)
+        get_filename_component(NM_path "${VCPKG_DETECTED_CMAKE_NM}" DIRECTORY)
+        get_filename_component(NM_filename "${VCPKG_DETECTED_CMAKE_NM}" NAME)
+        set(ENV{NM} "${NM_filename}")
+        string(APPEND OPTIONS " --nm=${NM_filename}")
+        list(APPEND prog_env "${NM_path}")
+    endif()
+
+    if(VCPKG_DETECTED_CMAKE_AR)
+        get_filename_component(AR_path "${VCPKG_DETECTED_CMAKE_AR}" DIRECTORY)
+        get_filename_component(AR_filename "${VCPKG_DETECTED_CMAKE_AR}" NAME)
+        set(ENV{AR} "${AR_filename}")
+        string(APPEND OPTIONS " --ar='${AR_filename}'")
+        list(APPEND prog_env "${AR_path}")
+    endif()
+
+    if(VCPKG_DETECTED_CMAKE_RANLIB)
+        get_filename_component(RANLIB_path "${VCPKG_DETECTED_CMAKE_RANLIB}" DIRECTORY)
+        get_filename_component(RANLIB_filename "${VCPKG_DETECTED_CMAKE_RANLIB}" NAME)
+        set(ENV{RANLIB} "${RANLIB_filename}")
+        string(APPEND OPTIONS " --ranlib=${RANLIB_filename}")
+        list(APPEND prog_env "${RANLIB_path}")
+    endif()
+
+    if(VCPKG_DETECTED_CMAKE_STRIP)
+        get_filename_component(STRIP_path "${VCPKG_DETECTED_CMAKE_STRIP}" DIRECTORY)
+        get_filename_component(STRIP_filename "${VCPKG_DETECTED_CMAKE_STRIP}" NAME)
+        set(ENV{STRIP} "${STRIP_filename}")
+        string(APPEND OPTIONS " --strip=${STRIP_filename}")
+        list(APPEND prog_env "${STRIP_path}")
+    endif()
+
+    list(REMOVE_DUPLICATES prog_env)
+    if(prog_env)
+        vcpkg_add_to_path(PREPEND ${prog_env})
+    endif()
+endif()
 
 if(VCPKG_DETECTED_MSVC)
     set(OPTIONS "--toolchain=msvc ${OPTIONS}")
@@ -484,7 +520,7 @@ else()
     set(OPTIONS "${OPTIONS} --disable-libmfx")
 endif()
 
-set(OPTIONS_CROSS " --enable-cross-compile")
+set(OPTIONS_CROSS "--enable-cross-compile")
 
 # ffmpeg needs --cross-prefix option to use appropriate tools for cross-compiling.
 if(VCPKG_DETECTED_CMAKE_C_COMPILER MATCHES "([^\/]*-)gcc$")
@@ -492,9 +528,9 @@ if(VCPKG_DETECTED_CMAKE_C_COMPILER MATCHES "([^\/]*-)gcc$")
 endif()
 
 if(VCPKG_TARGET_ARCHITECTURE STREQUAL "x64")
-    string(APPEND OPTIONS_CROSS " --arch=x86_64")
+    set(BUILD_ARCH "x86_64")
 else()
-    string(APPEND OPTIONS_CROSS " --arch=${VCPKG_TARGET_ARCHITECTURE}")
+    set(BUILD_ARCH ${VCPKG_TARGET_ARCHITECTURE})
 endif()
 
 if (VCPKG_TARGET_ARCHITECTURE STREQUAL "arm" OR VCPKG_TARGET_ARCHITECTURE STREQUAL "arm64")
@@ -534,13 +570,18 @@ if(VCPKG_LIBRARY_LINKAGE STREQUAL "static")
     set(OPTIONS "${OPTIONS} --pkg-config-flags=--static")
 endif()
 
+vcpkg_find_acquire_program(PKGCONFIG)
+set(OPTIONS "${OPTIONS} --pkg-config=\"${PKGCONFIG}\"")
+
 set(ENV_LIB_PATH "$ENV{${LIB_PATH_VAR}}")
 
-get_filename_component(CC_path "${VCPKG_DETECTED_CMAKE_C_COMPILER}" DIRECTORY)
-get_filename_component(CC_filename "${VCPKG_DETECTED_CMAKE_C_COMPILER}" NAME)
-set(ENV{CC} "${CC_filename}")
-if(CC_path)
-    vcpkg_add_to_path(PREPEND "${CC_path}")
+if(NOT VCPKG_CMAKE_SYSTEM_NAME STREQUAL "Android")
+    get_filename_component(CC_path "${VCPKG_DETECTED_CMAKE_C_COMPILER}" DIRECTORY)
+    get_filename_component(CC_filename "${VCPKG_DETECTED_CMAKE_C_COMPILER}" NAME)
+    set(ENV{CC} "${CC_filename}")
+    if(CC_path)
+        vcpkg_add_to_path(PREPEND "${CC_path}")
+    endif()
 endif()
 
 message(STATUS "Building Options: ${OPTIONS}")
@@ -564,6 +605,9 @@ if (NOT VCPKG_BUILD_TYPE OR VCPKG_BUILD_TYPE STREQUAL "release")
         set(ENV{ASFLAGS} "@${crsp}")
     endif()
     set(ENV{LDFLAGS} "@${ldrsp}")
+    if(VCPKG_CMAKE_SYSTEM_NAME STREQUAL "Android")
+        set(ENV{ARFLAGS} "${VCPKG_COMBINED_STATIC_LINKER_FLAGS_RELEASE}")
+    endif()
 
     set(BUILD_DIR         "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
     set(CONFIGURE_OPTIONS "${OPTIONS} ${OPTIONS_RELEASE}")
@@ -575,6 +619,7 @@ if (NOT VCPKG_BUILD_TYPE OR VCPKG_BUILD_TYPE STREQUAL "release")
         COMMAND "${SHELL}" ./build.sh
         WORKING_DIRECTORY "${BUILD_DIR}"
         LOGNAME "build-${TARGET_TRIPLET}-rel"
+        SAVE_LOG_FILES ffbuild/config.log
     )
 endif()
 
@@ -595,6 +640,9 @@ if (NOT VCPKG_BUILD_TYPE OR VCPKG_BUILD_TYPE STREQUAL "debug")
         set(ENV{ASFLAGS} "@${crsp}")
     endif()
     set(ENV{LDFLAGS} "@${ldrsp}")
+    if(VCPKG_CMAKE_SYSTEM_NAME STREQUAL "Android")
+        set(ENV{ARFLAGS} "${VCPKG_COMBINED_STATIC_LINKER_FLAGS_DEBUG}")
+    endif()
 
     set(BUILD_DIR         "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-dbg")
     set(CONFIGURE_OPTIONS "${OPTIONS} ${OPTIONS_DEBUG}")
@@ -606,6 +654,7 @@ if (NOT VCPKG_BUILD_TYPE OR VCPKG_BUILD_TYPE STREQUAL "debug")
         COMMAND "${SHELL}" ./build.sh
         WORKING_DIRECTORY "${BUILD_DIR}"
         LOGNAME "build-${TARGET_TRIPLET}-dbg"
+        SAVE_LOG_FILES ffbuild/config.log
     )
 endif()
 
