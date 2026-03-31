@@ -4,13 +4,12 @@ project(LagrangeCodec)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-if (ANDROID)
-    set(CMAKE_NINJA_FORCE_RESPONSE_FILE ON)
-endif()
-
 # Default builds keep producing the shared library as before. Static builds are
 # used by the dedicated CI workflow (and by consumers who want a .a archive).
 option(LAGRANGECODEC_BUILD_SHARED "Build LagrangeCodec as a shared library" ON)
+if (ANDROID AND NOT LAGRANGECODEC_BUILD_SHARED)
+    set(CMAKE_NINJA_FORCE_RESPONSE_FILE ON)
+endif()
 if (LINUX AND NOT ANDROID)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wl,-Bsymbolic")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wl,-Bsymbolic")
@@ -67,7 +66,7 @@ target_sources(LagrangeCodec PRIVATE ${SILK_SRC_FILES})
 
 target_include_directories(LagrangeCodec PUBLIC ${FFMPEG_INCLUDE_DIRS})
 target_link_directories(LagrangeCodec PUBLIC ${FFMPEG_LIBRARY_DIRS})
-if (ANDROID)
+if (ANDROID AND NOT LAGRANGECODEC_BUILD_SHARED)
     set(ffmpeg_android_link_libraries "")
     set(use_ffmpeg_link_item ON)
     foreach(item IN LISTS FFMPEG_LIBRARIES)
