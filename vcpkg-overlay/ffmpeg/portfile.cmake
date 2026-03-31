@@ -619,7 +619,6 @@ if (NOT VCPKG_BUILD_TYPE OR VCPKG_BUILD_TYPE STREQUAL "release")
         COMMAND "${SHELL}" ./build.sh
         WORKING_DIRECTORY "${BUILD_DIR}"
         LOGNAME "build-${TARGET_TRIPLET}-rel"
-        SAVE_LOG_FILES ffbuild/config.log
     )
 endif()
 
@@ -654,7 +653,6 @@ if (NOT VCPKG_BUILD_TYPE OR VCPKG_BUILD_TYPE STREQUAL "debug")
         COMMAND "${SHELL}" ./build.sh
         WORKING_DIRECTORY "${BUILD_DIR}"
         LOGNAME "build-${TARGET_TRIPLET}-dbg"
-        SAVE_LOG_FILES ffbuild/config.log
     )
 endif()
 
