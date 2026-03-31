@@ -262,6 +262,8 @@ jobs:
           fi
 
       - name: Stage Static Link Bundle
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
           set -euo pipefail
           OUT_DIR="bundle"
@@ -295,6 +297,11 @@ jobs:
           for name in "${required[@]}" "$zlib_name"; do
             cp -f "$VCPKG_LIB_DIR/$name" "$OUT_DIR/"
           done
+
+          STRIP_BIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
+          if [ -x "$STRIP_BIN" ]; then
+            find "$OUT_DIR" -name '*.a' -print -exec "$STRIP_BIN" --strip-debug {} \;
+          fi
 
           echo "Staged files:"
           ls -la "$OUT_DIR"
