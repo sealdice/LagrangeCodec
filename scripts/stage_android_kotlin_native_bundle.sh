@@ -4,6 +4,7 @@ set -euo pipefail
 
 BUILD_DIR="${1:-build}"
 OUT_DIR="${2:-bundle/androidArm64-kotlinNative}"
+CUSTOM_ZLIB_LIB="${3:-}"
 VCPKG_LIB_DIR="${BUILD_DIR}/vcpkg_installed/arm64-android/lib"
 PUBLIC_INCLUDE_DIR="include/public"
 
@@ -21,7 +22,9 @@ for name in "${required[@]}"; do
 done
 
 zlib_source=""
-if [ -f "${VCPKG_LIB_DIR}/libz.a" ]; then
+if [ -n "${CUSTOM_ZLIB_LIB}" ] && [ -f "${CUSTOM_ZLIB_LIB}" ]; then
+  zlib_source="${CUSTOM_ZLIB_LIB}"
+elif [ -f "${VCPKG_LIB_DIR}/libz.a" ]; then
   zlib_source="${VCPKG_LIB_DIR}/libz.a"
 elif [ -f "${VCPKG_LIB_DIR}/libzlib.a" ]; then
   zlib_source="${VCPKG_LIB_DIR}/libzlib.a"
