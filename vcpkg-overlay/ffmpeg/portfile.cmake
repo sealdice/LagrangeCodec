@@ -146,6 +146,41 @@ static void ansi_fputs(int level, int tint, const char *str, int local_use_color
 ]=]
         "Android av_log_default_callback override"
     )
+
+    lagrangecodec_replace_in_file(
+        "${ffmpeg_android_log_c}"
+        [=[        if (is_atty == 1)
+            fprintf(stderr, "    Last message repeated %d times\r", count);
+]=]
+        [=[        if (is_atty == 1) {
+#if defined(__ANDROID__)
+            __android_log_print(ANDROID_LOG_INFO, "FFmpeg", "Last message repeated %d times", count);
+#else
+            fprintf(stderr, "    Last message repeated %d times\r", count);
+#endif
+        }
+]=]
+        "Android repeated-message stderr removal"
+    )
+
+    lagrangecodec_replace_in_file(
+        "${ffmpeg_android_log_c}"
+        [=[    if (count > 0) {
+        fprintf(stderr, "    Last message repeated %d times\n", count);
+        count = 0;
+    }
+]=]
+        [=[    if (count > 0) {
+#if defined(__ANDROID__)
+        __android_log_print(ANDROID_LOG_INFO, "FFmpeg", "Last message repeated %d times", count);
+#else
+        fprintf(stderr, "    Last message repeated %d times\n", count);
+#endif
+        count = 0;
+    }
+]=]
+        "Android repeated-message flush stderr removal"
+    )
 endif()
 
 

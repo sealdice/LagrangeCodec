@@ -26,6 +26,13 @@ mkdir -p "${SRC_DIR}" "${BUILD_DIR}" "${PREFIX_DIR}"
 
 tar -xzf "${SRC_ARCHIVE}" -C "${SRC_DIR}" --strip-components=1
 
+cat >> "${SRC_DIR}/CMakeLists.txt" <<'EOF'
+
+if(ANDROID AND NOT BUILD_SHARED_LIBS)
+  add_compile_options(-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0)
+endif()
+EOF
+
 cmake -S "${SRC_DIR}" -B "${BUILD_DIR}" \
   -G Ninja \
   -DCMAKE_TOOLCHAIN_FILE="${ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake" \
@@ -36,7 +43,8 @@ cmake -S "${SRC_DIR}" -B "${BUILD_DIR}" \
   -DBUILD_SHARED_LIBS=OFF \
   -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
   -DCMAKE_INSTALL_PREFIX="${PREFIX_DIR}" \
-  -DCMAKE_C_FLAGS="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0"
+  -DCMAKE_C_FLAGS="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0" \
+  -DCMAKE_C_FLAGS_RELEASE="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0"
 
 cmake --build "${BUILD_DIR}"
 cmake --install "${BUILD_DIR}"

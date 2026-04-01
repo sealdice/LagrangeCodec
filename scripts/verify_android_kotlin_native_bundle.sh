@@ -31,7 +31,8 @@ done
 public_symbols=(audio_to_pcm silk_decode silk_encode video_first_frame video_get_size)
 defined_symbols_file="$(mktemp)"
 undefined_symbols_file="$(mktemp)"
-trap 'rm -f "${defined_symbols_file}" "${undefined_symbols_file}"' EXIT
+undefined_symbol_lines_file="$(mktemp)"
+trap 'rm -f "${defined_symbols_file}" "${undefined_symbols_file}" "${undefined_symbol_lines_file}"' EXIT
 
 "${NM_BIN}" --defined-only "${LIB_DIR}/libLagrangeCodec.a" 2>/dev/null > "${defined_symbols_file}" || true
 
@@ -45,6 +46,7 @@ for symbol in "${public_symbols[@]}"; do
 done
 
 for archive in "${LIB_DIR}"/*.a; do
+  "${NM_BIN}" -A -u "${archive}" 2>/dev/null >> "${undefined_symbol_lines_file}" || true
   "${NM_BIN}" -u "${archive}" 2>/dev/null | sed -nE 's/^.* U ([^[:space:]]+)$/\1/p' >> "${undefined_symbols_file}" || true
 done
 
@@ -53,7 +55,8 @@ sort -u "${undefined_symbols_file}" -o "${undefined_symbols_file}"
 forbidden=(stderr stdout stdin __errno_location __libc_start_main)
 for symbol in "${forbidden[@]}"; do
   if grep -qx "${symbol}" "${undefined_symbols_file}"; then
-    echo "::error::Forbidden undefined symbol detected: ${symbol}"
+    symbol_sources="$(grep -E "(^|[[:space:]:])${symbol}$" "${undefined_symbol_lines_file}" | tr '\n' ';' | sed 's/"/%22/g' | cut -c1-400)"
+    echo "::error::Forbidden undefined symbol detected: ${symbol}; sources=${symbol_sources}"
     echo "Forbidden undefined symbol detected: ${symbol}" >&2
     exit 1
   fi
@@ -61,7 +64,8 @@ done
 
 if grep -Eq '^__.*_chk$' "${undefined_symbols_file}"; then
   chk_symbols="$(grep -E '^__.*_chk$' "${undefined_symbols_file}" | tr '\n' ';' | sed 's/"/%22/g' | cut -c1-400)"
-  echo "::error::Forbidden fortified/glibc-style undefined symbols detected: ${chk_symbols}"
+  chk_sources="$(grep -E '__.*_chk$' "${undefined_symbol_lines_file}" | tr '\n' ';' | sed 's/"/%22/g' | cut -c1-700)"
+  echo "::error::Forbidden fortified/glibc-style undefined symbols detected: ${chk_symbols}; sources=${chk_sources}"
   echo "Forbidden fortified/glibc-style undefined symbols detected:" >&2
   grep -E '^__.*_chk$' "${undefined_symbols_file}" >&2
   exit 1
