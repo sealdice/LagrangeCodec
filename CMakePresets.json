@@ -107,6 +107,8 @@
                 "ANDROID_PLATFORM": "21",
                 "ANDROID_STL": "c++_static",
                 "CMAKE_BUILD_TYPE": "Debug",
+                "VCPKG_C_FLAGS": "-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0",
+                "VCPKG_CXX_FLAGS": "-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0",
                 "VCPKG_TARGET_TRIPLET": "arm64-android"
             }
         },
@@ -122,6 +124,8 @@
                 "ANDROID_PLATFORM": "21",
                 "ANDROID_STL": "c++_static",
                 "CMAKE_BUILD_TYPE": "Release",
+                "VCPKG_C_FLAGS": "-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0",
+                "VCPKG_CXX_FLAGS": "-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0",
                 "VCPKG_TARGET_TRIPLET": "arm64-android"
             }
         },
