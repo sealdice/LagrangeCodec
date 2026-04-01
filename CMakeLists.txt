@@ -31,9 +31,41 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(silk_fetch)
 message(STATUS "SILK source code will be downloaded to: ${silk_fetch_SOURCE_DIR}")
 
-find_package(FFMPEG REQUIRED)
+set(LAGRANGECODEC_ANDROID_NATIVE_PREFIX "" CACHE PATH "Prefix containing Android static FFmpeg/zlib built directly with the NDK")
 
-find_package(ZLIB REQUIRED)
+if (ANDROID AND NOT LAGRANGECODEC_BUILD_SHARED AND LAGRANGECODEC_ANDROID_NATIVE_PREFIX)
+    set(android_native_include_dir "${LAGRANGECODEC_ANDROID_NATIVE_PREFIX}/include")
+    set(android_native_lib_dir "${LAGRANGECODEC_ANDROID_NATIVE_PREFIX}/lib")
+
+    set(FFMPEG_INCLUDE_DIRS "${android_native_include_dir}")
+    set(FFMPEG_LIBRARY_DIRS "${android_native_lib_dir}")
+    set(FFMPEG_LIBRARIES
+        "${android_native_lib_dir}/libavformat.a"
+        "${android_native_lib_dir}/libavcodec.a"
+        "${android_native_lib_dir}/libswresample.a"
+        "${android_native_lib_dir}/libswscale.a"
+        "${android_native_lib_dir}/libavutil.a"
+    )
+
+    foreach(required_file IN LISTS FFMPEG_LIBRARIES)
+        if (NOT EXISTS "${required_file}")
+            message(FATAL_ERROR "Missing Android FFmpeg archive: ${required_file}")
+        endif()
+    endforeach()
+
+    if (NOT EXISTS "${android_native_lib_dir}/libz.a")
+        message(FATAL_ERROR "Missing Android zlib archive: ${android_native_lib_dir}/libz.a")
+    endif()
+
+    add_library(ZLIB::ZLIB STATIC IMPORTED GLOBAL)
+    set_target_properties(ZLIB::ZLIB PROPERTIES
+        IMPORTED_LOCATION "${android_native_lib_dir}/libz.a"
+        INTERFACE_INCLUDE_DIRECTORIES "${android_native_include_dir}"
+    )
+else()
+    find_package(FFMPEG REQUIRED)
+    find_package(ZLIB REQUIRED)
+endif()
 
 file(GLOB SOURCES CONFIGURE_DEPENDS "src/*.cpp")
 if (LAGRANGECODEC_BUILD_SHARED)

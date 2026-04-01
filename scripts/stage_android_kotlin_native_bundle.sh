@@ -4,9 +4,13 @@ set -euo pipefail
 
 BUILD_DIR="${1:-build}"
 OUT_DIR="${2:-bundle/androidArm64-kotlinNative}"
-CUSTOM_ZLIB_LIB="${3:-}"
-VCPKG_LIB_DIR="${BUILD_DIR}/vcpkg_installed/arm64-android/lib"
+ANDROID_NATIVE_PREFIX="${3:-}"
+LIB_SOURCE_DIR="${BUILD_DIR}/vcpkg_installed/arm64-android/lib"
 PUBLIC_INCLUDE_DIR="include/public"
+
+if [ -n "${ANDROID_NATIVE_PREFIX}" ]; then
+  LIB_SOURCE_DIR="${ANDROID_NATIVE_PREFIX}/lib"
+fi
 
 mkdir -p "${OUT_DIR}/lib" "${OUT_DIR}/include/public"
 
@@ -15,32 +19,30 @@ cp -f "${BUILD_DIR}/libLagrangeCodec.a" "${OUT_DIR}/lib/"
 required=(libavformat.a libavcodec.a libavutil.a libswresample.a libswscale.a)
 missing=0
 for name in "${required[@]}"; do
-  if [ ! -f "${VCPKG_LIB_DIR}/${name}" ]; then
-    echo "Missing required dependency: ${VCPKG_LIB_DIR}/${name}" >&2
+  if [ ! -f "${LIB_SOURCE_DIR}/${name}" ]; then
+    echo "Missing required dependency: ${LIB_SOURCE_DIR}/${name}" >&2
     missing=1
   fi
 done
 
 zlib_source=""
-if [ -n "${CUSTOM_ZLIB_LIB}" ] && [ -f "${CUSTOM_ZLIB_LIB}" ]; then
-  zlib_source="${CUSTOM_ZLIB_LIB}"
-elif [ -f "${VCPKG_LIB_DIR}/libz.a" ]; then
-  zlib_source="${VCPKG_LIB_DIR}/libz.a"
-elif [ -f "${VCPKG_LIB_DIR}/libzlib.a" ]; then
-  zlib_source="${VCPKG_LIB_DIR}/libzlib.a"
+if [ -f "${LIB_SOURCE_DIR}/libz.a" ]; then
+  zlib_source="${LIB_SOURCE_DIR}/libz.a"
+elif [ -f "${LIB_SOURCE_DIR}/libzlib.a" ]; then
+  zlib_source="${LIB_SOURCE_DIR}/libzlib.a"
 else
-  echo "Missing required dependency: ${VCPKG_LIB_DIR}/libz.a (or libzlib.a)" >&2
+  echo "Missing required dependency: ${LIB_SOURCE_DIR}/libz.a (or libzlib.a)" >&2
   missing=1
 fi
 
 if [ "${missing}" -ne 0 ]; then
-  echo "Available files under ${VCPKG_LIB_DIR}:" >&2
-  ls -la "${VCPKG_LIB_DIR}" >&2 || true
+  echo "Available files under ${LIB_SOURCE_DIR}:" >&2
+  ls -la "${LIB_SOURCE_DIR}" >&2 || true
   exit 1
 fi
 
 for name in "${required[@]}"; do
-  cp -f "${VCPKG_LIB_DIR}/${name}" "${OUT_DIR}/lib/${name}"
+  cp -f "${LIB_SOURCE_DIR}/${name}" "${OUT_DIR}/lib/${name}"
 done
 
 cp -f "${zlib_source}" "${OUT_DIR}/lib/libz.a"

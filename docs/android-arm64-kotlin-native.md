@@ -16,8 +16,9 @@ This bundle is produced specifically for `androidNativeArm64` Kotlin/Native exec
 ## Why this bundle differs from a normal Android static build
 
 - LagrangeCodec no longer emits logs through `stderr` / `stdout` on Android; it uses `liblog` instead.
-- FFmpeg Android static builds are sanitized to drop `_FORTIFY_SOURCE`, which avoids host/glibc-style fortified unresolved symbols such as `__write_chk` when the archives are linked straight into a Kotlin/Native executable.
-- Android dependency lookup is restricted to the target sysroot / vcpkg target libraries during the build, which reduces the risk of accidentally pulling host libraries into the arm64 archive set.
+- Android `arm64` dependencies are built directly with the Android NDK toolchain instead of using `vcpkg` prebuilt archives.
+- FFmpeg and zlib are compiled with `_FORTIFY_SOURCE` disabled for this static-link scenario, which avoids host/glibc-style fortified unresolved symbols such as `__write_chk` when the archives are linked straight into a Kotlin/Native executable.
+- The FFmpeg build is constrained to the minimal codec/container set needed by LagrangeCodec, which reduces accidental dependency bleed from host libraries.
 
 ## Replacement target in acidify-codec
 
