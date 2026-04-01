@@ -1,0 +1,59 @@
+diff --git a/libavutil/log.c b/libavutil/log.c
+index 95a324b..3fd0d58 100644
+--- a/libavutil/log.c
++++ b/libavutil/log.c
+@@ -40,6 +40,10 @@
+ #include "internal.h"
+ #include "log.h"
+ #include "thread.h"
++
++#if defined(__ANDROID__)
++#include <android/log.h>
++#endif
+ 
+ static AVMutex mutex = AV_MUTEX_INITIALIZER;
+ 
+@@ -180,6 +184,20 @@ static void check_color_terminal(void)
+         use_color *= 256;
+ }
+ 
++#if defined(__ANDROID__)
++static int av_log_android_priority(int level)
++{
++    if (level <= AV_LOG_ERROR)   return ANDROID_LOG_ERROR;
++    if (level <= AV_LOG_WARNING) return ANDROID_LOG_WARN;
++    if (level <= AV_LOG_INFO)    return ANDROID_LOG_INFO;
++    if (level <= AV_LOG_VERBOSE) return ANDROID_LOG_VERBOSE;
++    return ANDROID_LOG_DEBUG;
++}
++
++static void ansi_fputs(int level, int tint, const char *str, int local_use_color)
++{
++    (void)level; (void)tint; (void)str; (void)local_use_color;
++}
++#else
+ static void ansi_fputs(int level, int tint, const char *str, int local_use_color)
+ {
+     if (local_use_color == 1) {
+@@ -202,6 +220,7 @@ static void ansi_fputs(int level, int tint, const char *str, int local_use_color)
+     } else
+         fputs(str, stderr);
+ }
++#endif
+ 
+ static void colored_fputs(int level, int tint, const char *str)
+ {
+@@ -365,6 +384,12 @@ void av_log_default_callback(void* ptr, int level, const char* fmt, va_list vl)
+     format_line(ptr, level, fmt, vl, part, &print_prefix, type);
+     snprintf(line, sizeof(line), "%s%s%s%s", part[0].str, part[1].str, part[2].str, part[3].str);
+ 
++#if defined(__ANDROID__)
++    sanitize((uint8_t *)line);
++    if (*line)
++        __android_log_write(av_log_android_priority(level), "FFmpeg", line);
++    goto end;
++#endif
++
+ #if HAVE_ISATTY
+     if (!is_atty)
+         is_atty = isatty(2) ? 1 : -1;

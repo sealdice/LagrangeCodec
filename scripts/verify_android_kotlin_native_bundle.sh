@@ -22,6 +22,7 @@ fi
 required=(libLagrangeCodec.a libavcodec.a libavformat.a libavutil.a libswresample.a libswscale.a libz.a)
 for name in "${required[@]}"; do
   if [ ! -f "${LIB_DIR}/${name}" ]; then
+    echo "::error::Missing required archive: ${LIB_DIR}/${name}"
     echo "Missing required archive: ${LIB_DIR}/${name}" >&2
     exit 1
   fi
@@ -30,6 +31,7 @@ done
 public_symbols=(audio_to_pcm silk_decode silk_encode video_first_frame video_get_size)
 for symbol in "${public_symbols[@]}"; do
   if ! "${NM_BIN}" --defined-only --extern-only "${LIB_DIR}/libLagrangeCodec.a" 2>/dev/null | grep -Eq "(^|[[:space:]])${symbol}$"; then
+    echo "::error::Missing exported symbol in libLagrangeCodec.a: ${symbol}"
     echo "Missing exported symbol in libLagrangeCodec.a: ${symbol}" >&2
     exit 1
   fi
@@ -47,12 +49,14 @@ sort -u "${undefined_symbols_file}" -o "${undefined_symbols_file}"
 forbidden=(stderr stdout stdin __errno_location __libc_start_main)
 for symbol in "${forbidden[@]}"; do
   if grep -qx "${symbol}" "${undefined_symbols_file}"; then
+    echo "::error::Forbidden undefined symbol detected: ${symbol}"
     echo "Forbidden undefined symbol detected: ${symbol}" >&2
     exit 1
   fi
 done
 
 if grep -Eq '^__.*_chk$' "${undefined_symbols_file}"; then
+  echo "::error::Forbidden fortified/glibc-style undefined symbols detected"
   echo "Forbidden fortified/glibc-style undefined symbols detected:" >&2
   grep -E '^__.*_chk$' "${undefined_symbols_file}" >&2
   exit 1

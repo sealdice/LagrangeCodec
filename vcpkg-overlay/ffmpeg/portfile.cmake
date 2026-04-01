@@ -19,6 +19,7 @@ vcpkg_from_github(
         0020-fix-aarch64-libswscale.patch
         0021-fix-sdl2-version-check.patch
         0022-fix-iconv.patch
+        0024-android-avutil-log-no-stderr.patch
 )
 
 if (SOURCE_PATH MATCHES " ")
