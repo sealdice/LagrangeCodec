@@ -99,7 +99,6 @@ inline void destroy_format_context(AVFormatContext** format_context) {
             av_freep(&input->data);
             av_freep(&input);
         }
-        av_freep(&avio_ctx->buffer);
         avio_context_free(&avio_ctx);
     }
 }
@@ -154,7 +153,6 @@ inline int create_format_context(const uint8_t* data, int data_len, AVFormatCont
 
     AVFormatContext* context = avformat_alloc_context();
     if (!context) {
-        av_freep(&avio_ctx->buffer);
         avio_context_free(&avio_ctx);
         av_freep(&input->data);
         av_freep(&input);
