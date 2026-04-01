@@ -243,11 +243,6 @@ jobs:
           OUT_DIR="bundle/androidArm64-kotlinNative"
           bash scripts/stage_android_kotlin_native_bundle.sh build "$OUT_DIR"
 
-          STRIP_BIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
-          if [ -x "$STRIP_BIN" ]; then
-            find "$OUT_DIR/lib" -name '*.a' -print -exec "$STRIP_BIN" --strip-debug {} \;
-          fi
-
           echo "Staged files:"
           find "$OUT_DIR" -maxdepth 3 -type f | sort
 
