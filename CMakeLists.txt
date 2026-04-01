@@ -49,6 +49,10 @@ if (WIN32 AND LAGRANGECODEC_BUILD_SHARED)
     target_compile_definitions(LagrangeCodec PRIVATE LAGRANGECODEC_SHARED_BUILD)
 endif()
 
+if (ANDROID AND NOT LAGRANGECODEC_BUILD_SHARED)
+    target_compile_options(LagrangeCodec PRIVATE -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0)
+endif()
+
 target_include_directories(LagrangeCodec
     PUBLIC
         ${CMAKE_SOURCE_DIR}/include/public

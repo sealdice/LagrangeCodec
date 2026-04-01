@@ -60,7 +60,8 @@ for symbol in "${forbidden[@]}"; do
 done
 
 if grep -Eq '^__.*_chk$' "${undefined_symbols_file}"; then
-  echo "::error::Forbidden fortified/glibc-style undefined symbols detected"
+  chk_symbols="$(grep -E '^__.*_chk$' "${undefined_symbols_file}" | tr '\n' ';' | sed 's/"/%22/g' | cut -c1-400)"
+  echo "::error::Forbidden fortified/glibc-style undefined symbols detected: ${chk_symbols}"
   echo "Forbidden fortified/glibc-style undefined symbols detected:" >&2
   grep -E '^__.*_chk$' "${undefined_symbols_file}" >&2
   exit 1
