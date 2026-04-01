@@ -39,7 +39,7 @@ inline void lc_android_terminal_log(int priority, const char* level, const char*
         body_len = 0;
     }
 
-    size_t total_len = std::strnlen(buffer, sizeof(buffer));
+    size_t total_len = ::strnlen(buffer, sizeof(buffer));
     if (total_len + 1 < sizeof(buffer) && (total_len == 0 || buffer[total_len - 1] != '\n')) {
         buffer[total_len++] = '\n';
         buffer[total_len] = '\0';
