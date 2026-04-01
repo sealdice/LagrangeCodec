@@ -19,11 +19,133 @@ vcpkg_from_github(
         0020-fix-aarch64-libswscale.patch
         0021-fix-sdl2-version-check.patch
         0022-fix-iconv.patch
-        0024-android-avutil-log-no-stderr.patch
 )
 
 if (SOURCE_PATH MATCHES " ")
     message(FATAL_ERROR "Error: ffmpeg will not build with spaces in the path. Please use a directory with no spaces")
+endif()
+
+function(lagrangecodec_replace_in_file file_path old_text new_text description)
+    file(READ "${file_path}" file_contents)
+    string(FIND "${file_contents}" "${old_text}" found_at)
+    if(found_at EQUAL -1)
+        message(FATAL_ERROR "Failed to locate ${description} in ${file_path}")
+    endif()
+    string(REPLACE "${old_text}" "${new_text}" file_contents "${file_contents}")
+    file(WRITE "${file_path}" "${file_contents}")
+endfunction()
+
+if(VCPKG_CMAKE_SYSTEM_NAME STREQUAL "Android" AND VCPKG_LIBRARY_LINKAGE STREQUAL "static")
+    set(ffmpeg_android_log_c "${SOURCE_PATH}/libavutil/log.c")
+
+    lagrangecodec_replace_in_file(
+        "${ffmpeg_android_log_c}"
+        [=[#include "log.h"
+#include "thread.h"
+]=]
+        [=[#include "log.h"
+#include "thread.h"
+
+#if defined(__ANDROID__)
+#include <android/log.h>
+#endif
+]=]
+        "Android log include insertion"
+    )
+
+    lagrangecodec_replace_in_file(
+        "${ffmpeg_android_log_c}"
+        [=[static void ansi_fputs(int level, int tint, const char *str, int local_use_color)
+{
+    if (local_use_color == 1) {
+        fprintf(stderr,
+                "\033[%"PRIu32";3%"PRIu32"m%s\033[0m",
+                (color[level] >> 4) & 15,
+                color[level] & 15,
+                str);
+    } else if (tint && use_color == 256) {
+        fprintf(stderr,
+                "\033[48;5;%"PRIu32"m\033[38;5;%dm%s\033[0m",
+                (color[level] >> 16) & 0xff,
+                tint,
+                str);
+    } else if (local_use_color == 256) {
+        fprintf(stderr,
+                "\033[48;5;%"PRIu32"m\033[38;5;%"PRIu32"m%s\033[0m",
+                (color[level] >> 16) & 0xff,
+                (color[level] >> 8) & 0xff,
+                str);
+    } else
+        fputs(str, stderr);
+}
+]=]
+        [=[#if defined(__ANDROID__)
+static int av_log_android_priority(int level)
+{
+    if (level <= AV_LOG_ERROR)   return ANDROID_LOG_ERROR;
+    if (level <= AV_LOG_WARNING) return ANDROID_LOG_WARN;
+    if (level <= AV_LOG_INFO)    return ANDROID_LOG_INFO;
+    if (level <= AV_LOG_VERBOSE) return ANDROID_LOG_VERBOSE;
+    return ANDROID_LOG_DEBUG;
+}
+
+static void ansi_fputs(int level, int tint, const char *str, int local_use_color)
+{
+    (void)level;
+    (void)tint;
+    (void)str;
+    (void)local_use_color;
+}
+#else
+static void ansi_fputs(int level, int tint, const char *str, int local_use_color)
+{
+    if (local_use_color == 1) {
+        fprintf(stderr,
+                "\033[%"PRIu32";3%"PRIu32"m%s\033[0m",
+                (color[level] >> 4) & 15,
+                color[level] & 15,
+                str);
+    } else if (tint && use_color == 256) {
+        fprintf(stderr,
+                "\033[48;5;%"PRIu32"m\033[38;5;%dm%s\033[0m",
+                (color[level] >> 16) & 0xff,
+                tint,
+                str);
+    } else if (local_use_color == 256) {
+        fprintf(stderr,
+                "\033[48;5;%"PRIu32"m\033[38;5;%"PRIu32"m%s\033[0m",
+                (color[level] >> 16) & 0xff,
+                (color[level] >> 8) & 0xff,
+                str);
+    } else
+        fputs(str, stderr);
+}
+#endif
+]=]
+        "Android stderr-free ansi_fputs override"
+    )
+
+    lagrangecodec_replace_in_file(
+        "${ffmpeg_android_log_c}"
+        [=[    format_line(ptr, level, fmt, vl, part, &print_prefix, type);
+    snprintf(line, sizeof(line), "%s%s%s%s", part[0].str, part[1].str, part[2].str, part[3].str);
+
+#if HAVE_ISATTY
+]=]
+        [=[    format_line(ptr, level, fmt, vl, part, &print_prefix, type);
+    snprintf(line, sizeof(line), "%s%s%s%s", part[0].str, part[1].str, part[2].str, part[3].str);
+
+#if defined(__ANDROID__)
+    sanitize((uint8_t *)line);
+    if (*line)
+        __android_log_write(av_log_android_priority(level), "FFmpeg", line);
+    goto end;
+#endif
+
+#if HAVE_ISATTY
+]=]
+        "Android av_log_default_callback override"
+    )
 endif()
 
 
