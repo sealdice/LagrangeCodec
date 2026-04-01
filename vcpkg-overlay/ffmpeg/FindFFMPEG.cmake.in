@@ -61,6 +61,13 @@ function(append_dependencies out)
             list(APPEND ${out} "-lgcc_s")
         elseif("${lib_name}" STREQUAL "stdc++")
             list(APPEND ${out} "-lstdc++")
+        elseif(ANDROID AND ("${lib_name}" STREQUAL "m"
+            OR "${lib_name}" STREQUAL "dl"
+            OR "${lib_name}" STREQUAL "log"
+            OR "${lib_name}" STREQUAL "android"
+            OR "${lib_name}" STREQUAL "atomic"
+            OR "${lib_name}" STREQUAL "c"))
+            list(APPEND ${out} "${lib_name}")
         else()
             # first look in ${path} specifically to ensure we find the right release/debug variant
             find_library(FFMPEG_DEPENDENCY_${lib_name}_${config} NAMES "${lib_name}" PATHS "${path}" NO_DEFAULT_PATH)
