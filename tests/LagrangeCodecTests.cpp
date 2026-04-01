@@ -181,6 +181,43 @@ TEST_F(LagrangeAudioCodecTest, TestPcmToSilkOnly) {
     std::cout << "SILK encoded data size: " << localSilkData.size() << " bytes" << std::endl;
 }
 
+TEST_F(LagrangeCodecTest, AudioToPcmRejectsInvalidInputSafely) {
+    std::vector<uint8_t> invalidAudio = {0x00, 0x01, 0x02, 0x03, 0x04};
+    std::vector<uint8_t> output;
+
+    const int result = audio_to_pcm(invalidAudio.data(), static_cast<int>(invalidAudio.size()), testCallback, &output);
+    EXPECT_NE(result, 0);
+    EXPECT_TRUE(output.empty());
+}
+
+TEST_F(LagrangeCodecTest, AudioToPcmRejectsNullCallbackSafely) {
+    ASSERT_TRUE(hasAudioData) << "Audio test data not available";
+    const int result = audio_to_pcm(audioData.data(), static_cast<int>(audioData.size()), nullptr, nullptr);
+    EXPECT_NE(result, 0);
+}
+
+TEST_F(LagrangeCodecTest, VideoGetSizeRejectsInvalidInputSafely) {
+    std::vector<uint8_t> invalidVideo = {0x00, 0x01, 0x02, 0x03, 0x04};
+    VideoInfo info = {};
+
+    const int result = video_get_size(invalidVideo.data(), static_cast<int>(invalidVideo.size()), info);
+    EXPECT_NE(result, 0);
+    EXPECT_EQ(info.width, 0);
+    EXPECT_EQ(info.height, 0);
+    EXPECT_EQ(info.duration, 0);
+}
+
+TEST_F(LagrangeCodecTest, VideoFirstFrameRejectsInvalidInputSafely) {
+    std::vector<uint8_t> invalidVideo = {0x00, 0x01, 0x02, 0x03, 0x04};
+    uint8_t* frameData = nullptr;
+    int frameLen = 0;
+
+    const int result = video_first_frame(invalidVideo.data(), static_cast<int>(invalidVideo.size()), frameData, frameLen);
+    EXPECT_NE(result, 0);
+    EXPECT_EQ(frameData, nullptr);
+    EXPECT_EQ(frameLen, 0);
+}
+
 int main(int argc, char** argv) {
     std::cout << "Starting LagrangeCodec tests..." << std::endl;
     testing::InitGoogleTest(&argc, argv);
