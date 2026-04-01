@@ -13,6 +13,8 @@ This bundle is produced specifically for `androidNativeArm64` Kotlin/Native exec
 - `lib/libz.a`
 - `include/public/*.h`
 
+`lib/libLagrangeCodec.a` is the preferred Android artifact. In the Android bundle it is a merged static archive that already contains the LagrangeCodec objects plus FFmpeg/zlib objects needed by Kotlin/Native final linking.
+
 ## Why this bundle differs from a normal Android static build
 
 - LagrangeCodec no longer emits logs through `stderr` / `stdout` on Android; it uses `liblog` instead.
@@ -22,9 +24,11 @@ This bundle is produced specifically for `androidNativeArm64` Kotlin/Native exec
 
 ## Replacement target in acidify-codec
 
-Copy every archive under `lib/` into:
+Copy the bundle into:
 
 `acidify-codec/src/nativeInterop/lib/androidArm64/`
+
+For Kotlin/Native Android, prefer linking `libLagrangeCodec.a` first. The separate `libav*.a` and `libz.a` files are kept in the bundle mainly for debugging and fallback use.
 
 Recommended linker opts for `androidNativeArm64` stay:
 
@@ -37,9 +41,3 @@ Recommended linker opts for `androidNativeArm64` stay:
 Recommended static library order:
 
 1. `libLagrangeCodec.a`
-2. `libavformat.a`
-3. `libavcodec.a`
-4. `libswresample.a`
-5. `libswscale.a`
-6. `libavutil.a`
-7. `libz.a`

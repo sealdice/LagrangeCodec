@@ -29,6 +29,7 @@ for name in "${required[@]}"; do
 done
 
 public_symbols=(audio_to_pcm silk_decode silk_encode video_first_frame video_get_size)
+merged_dependency_symbols=(av_log av_malloc av_get_pix_fmt_name av_pix_fmt_desc_get)
 defined_symbols_file="$(mktemp)"
 undefined_symbols_file="$(mktemp)"
 undefined_symbol_lines_file="$(mktemp)"
@@ -41,6 +42,14 @@ for symbol in "${public_symbols[@]}"; do
     sample_symbols="$(grep -E 'audio_to_pcm|silk_|video_' "${defined_symbols_file}" | tr '\n' ';' | sed 's/"/%22/g' | cut -c1-400)"
     echo "::error::Missing exported symbol in libLagrangeCodec.a: ${symbol}; visible symbols=${sample_symbols}"
     echo "Missing exported symbol in libLagrangeCodec.a: ${symbol}" >&2
+    exit 1
+  fi
+done
+
+for symbol in "${merged_dependency_symbols[@]}"; do
+  if ! grep -Eq "(^|[[:space:]])(_)?${symbol}$" "${defined_symbols_file}"; then
+    echo "::error::Merged libLagrangeCodec.a is missing FFmpeg dependency symbol: ${symbol}"
+    echo "Merged libLagrangeCodec.a is missing FFmpeg dependency symbol: ${symbol}" >&2
     exit 1
   fi
 done
