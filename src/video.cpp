@@ -246,7 +246,9 @@ cleanup:
 
 EXPORT int video_get_size(uint8_t* video_data, int data_len, VideoInfo& info) {
     AVFormatContext* format_context = nullptr;
+    AVCodecParameters* codec_parameters = nullptr;
     int result = LAGRANGECODEC_ERROR_DECODE_FAILED;
+    int index = -1;
 
     info = {};
 
@@ -270,8 +272,6 @@ EXPORT int video_get_size(uint8_t* video_data, int data_len, VideoInfo& info) {
         goto cleanup;
     }
 
-    AVCodecParameters* codec_parameters = nullptr;
-    int index = -1;
     for (unsigned int i = 0; i < format_context->nb_streams; i++) {
         if (format_context->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
             index = i;
