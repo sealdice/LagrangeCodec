@@ -15,7 +15,7 @@
 constexpr std::string_view silk_magic = "\x02#!SILK_V3";
 constexpr SKP_int32 sample_rate = 24000;
 
-int silk_decode(uint8_t* silk_data, int data_len, cb_codec callback, void* userdata) {
+EXPORT int silk_decode(uint8_t* silk_data, int data_len, cb_codec callback, void* userdata) {
     SKP_uint8 payload[MAX_BYTES_PER_FRAME * MAX_INPUT_FRAMES * (MAX_LBRR_DELAY + 1)];
     SKP_uint8* payloadEnd = nullptr, * payloadToDec = nullptr;
     SKP_int16 nBytesPerPacket[MAX_LBRR_DELAY + 1];
@@ -141,7 +141,7 @@ int silk_decode(uint8_t* silk_data, int data_len, cb_codec callback, void* userd
     return 0;
 }
 
-int silk_encode(uint8_t* pcm_data, int data_len, cb_codec callback, void* userdata) {
+EXPORT int silk_encode(uint8_t* pcm_data, int data_len, cb_codec callback, void* userdata) {
     size_t counter;
     SKP_int16 n_bytes;
     SKP_uint8 payload[MAX_BYTES_PER_FRAME * MAX_INPUT_FRAMES];

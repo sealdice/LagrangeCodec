@@ -64,7 +64,7 @@ int save_frame_as_png(AVFrame* frame, int width, int height, uint8_t*& out, int&
     return 0;
 }
 
-int video_first_frame(uint8_t* video_data, int data_len, uint8_t*& out, int& out_len) {
+EXPORT int video_first_frame(uint8_t* video_data, int data_len, uint8_t*& out, int& out_len) {
     AVFormatContext* format_context = nullptr;
 
     int ret_code = create_format_context(video_data, data_len, &format_context);
@@ -155,7 +155,7 @@ int video_first_frame(uint8_t* video_data, int data_len, uint8_t*& out, int& out
     return 0;
 }
 
-int video_get_size(uint8_t* video_data, int data_len, VideoInfo& info) {
+EXPORT int video_get_size(uint8_t* video_data, int data_len, VideoInfo& info) {
     AVFormatContext* format_context = nullptr;
 
     int ret_code = create_format_context(video_data, data_len, &format_context);

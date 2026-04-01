@@ -11,7 +11,7 @@ extern "C" {
 #include <libswresample/swresample.h>
 }
 
-int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, void* userdata) {
+EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, void* userdata) {
     AVFormatContext* format_context = nullptr;
     int ret;
     if (create_format_context(audio_data, data_len, &format_context) < 0) {
