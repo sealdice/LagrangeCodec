@@ -240,51 +240,33 @@ jobs:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
           set -euo pipefail
-          OUT_DIR="bundle"
-          VCPKG_LIB_DIR="build/vcpkg_installed/arm64-android/lib"
-          mkdir -p "$OUT_DIR"
-
-          cp -f "build/libLagrangeCodec.a" "$OUT_DIR/"
-
-          required=(libavformat.a libavcodec.a libavutil.a libswresample.a libswscale.a)
-          missing=0
-          for name in "${required[@]}"; do
-            if [ ! -f "$VCPKG_LIB_DIR/$name" ]; then
-              echo "Missing required dependency: $VCPKG_LIB_DIR/$name"
-              missing=1
-            fi
-          done
-          if [ -f "$VCPKG_LIB_DIR/libz.a" ]; then
-            zlib_name="libz.a"
-          elif [ -f "$VCPKG_LIB_DIR/libzlib.a" ]; then
-            zlib_name="libzlib.a"
-          else
-            echo "Missing required dependency: $VCPKG_LIB_DIR/libz.a (or libzlib.a)"
-            missing=1
-          fi
-          if [ "$missing" -ne 0 ]; then
-            echo "Available files under $VCPKG_LIB_DIR:"
-            ls -la "$VCPKG_LIB_DIR" || true
-            exit 1
-          fi
-
-          for name in "${required[@]}" "$zlib_name"; do
-            cp -f "$VCPKG_LIB_DIR/$name" "$OUT_DIR/"
-          done
+          OUT_DIR="bundle/androidArm64-kotlinNative"
+          bash scripts/stage_android_kotlin_native_bundle.sh build "$OUT_DIR"
 
           STRIP_BIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
           if [ -x "$STRIP_BIN" ]; then
-            find "$OUT_DIR" -name '*.a' -print -exec "$STRIP_BIN" --strip-debug {} \;
+            find "$OUT_DIR/lib" -name '*.a' -print -exec "$STRIP_BIN" --strip-debug {} \;
           fi
 
           echo "Staged files:"
-          ls -la "$OUT_DIR"
+          find "$OUT_DIR" -maxdepth 3 -type f | sort
+
+      - name: Verify Android Kotlin/Native Bundle
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          set -euo pipefail
+          NM_BIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm"
+          if [ ! -x "$NM_BIN" ]; then
+            NM_BIN="$(command -v llvm-nm || command -v nm)"
+          fi
+          bash scripts/verify_android_kotlin_native_bundle.sh bundle/androidArm64-kotlinNative "$NM_BIN"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: LagrangeCodec.staticlink.android.arm64
-          path: bundle/
+          path: bundle/androidArm64-kotlinNative/
 
   build-macos-amd64:
     runs-on: macos-latest

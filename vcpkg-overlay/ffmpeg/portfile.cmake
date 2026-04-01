@@ -54,7 +54,7 @@ endif()
 
 if (NOT VCPKG_BUILD_TYPE OR VCPKG_BUILD_TYPE STREQUAL "release")
     message(STATUS "Building ${PORT} for Release www")
-    set(OPTIONS "--disable-everything --disable-doc --enable-runtime-cpudetect --disable-autodetect --enable-small --disable-debug --enable-stripping")
+    set(OPTIONS "--disable-everything --enable-pic --disable-doc --enable-runtime-cpudetect --disable-autodetect --enable-small --disable-debug --enable-stripping")
 else()
     message(STATUS "Building ${PORT} for Debug www")
     set(OPTIONS "--disable-everything --enable-pic --disable-doc --enable-debug --enable-runtime-cpudetect --disable-autodetect")
@@ -150,6 +150,38 @@ if(VCPKG_CMAKE_SYSTEM_NAME STREQUAL "Android")
     if(prog_env)
         vcpkg_add_to_path(PREPEND ${prog_env})
     endif()
+
+    if(DEFINED CMAKE_SYSROOT AND NOT CMAKE_SYSROOT STREQUAL "")
+        string(APPEND OPTIONS " --sysroot=${CMAKE_SYSROOT}")
+    endif()
+endif()
+
+function(lagrangecodec_sanitize_android_static_flags var_name)
+    if(NOT DEFINED ${var_name})
+        return()
+    endif()
+
+    set(flags "${${var_name}}")
+    string(REGEX REPLACE "(^| )-D_FORTIFY_SOURCE(=[^ ]*)?( |$)" " " flags "${flags}")
+    string(REGEX REPLACE "(^| )-U_FORTIFY_SOURCE( |$)" " " flags "${flags}")
+    string(REGEX REPLACE "[ ]+" " " flags "${flags}")
+    string(STRIP "${flags}" flags)
+
+    if(flags)
+        string(APPEND flags " -U_FORTIFY_SOURCE")
+    else()
+        set(flags "-U_FORTIFY_SOURCE")
+    endif()
+
+    set(${var_name} "${flags}" PARENT_SCOPE)
+endfunction()
+
+if(VCPKG_CMAKE_SYSTEM_NAME STREQUAL "Android" AND VCPKG_LIBRARY_LINKAGE STREQUAL "static")
+    # Kotlin/Native androidNativeArm64 links these archives straight into an
+    # executable; avoid fortify/glibc-flavoured stdio wrappers that surface as
+    # unresolved host-style symbols such as __write_chk.
+    lagrangecodec_sanitize_android_static_flags(VCPKG_COMBINED_C_FLAGS_RELEASE)
+    lagrangecodec_sanitize_android_static_flags(VCPKG_COMBINED_C_FLAGS_DEBUG)
 endif()
 
 if(VCPKG_DETECTED_MSVC)

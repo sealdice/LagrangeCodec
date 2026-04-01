@@ -15,7 +15,7 @@ int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, void* use
     AVFormatContext* format_context = nullptr;
     int ret;
     if (create_format_context(audio_data, data_len, &format_context) < 0) {
-        fprintf(stderr, "ERROR: failed to create format context\n");
+        LC_LOGE("ERROR: failed to create format context\n");
         return -1;
     }
 
@@ -26,14 +26,14 @@ int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, void* use
 
     ret = avformat_find_stream_info(format_context, nullptr);
     if (ret < 0) {
-        fprintf(stderr, "ERROR: failed to stream info \n");
+        LC_LOGE("ERROR: failed to stream info\n");
         return -1;
     }
 
-    printf("DEBUG: number of streams found: %d\n", format_context->nb_streams);
+    LC_LOGD("DEBUG: number of streams found: %d\n", format_context->nb_streams);
     const int stream_index = av_find_best_stream(format_context, AVMEDIA_TYPE_AUDIO, -1, -1, nullptr, 0);
     if (stream_index < 0) {
-        fprintf(stderr, "ERROR: no audio stream found\n");
+        LC_LOGE("ERROR: no audio stream found\n");
         return -1;
     }
 
@@ -41,7 +41,7 @@ int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, void* use
 
     const AVCodec *decoder = avcodec_find_decoder(stream->codecpar->codec_id);
     if (!decoder) {
-        fprintf(stderr, "ERROR: no decoder found\n");
+        LC_LOGE("ERROR: no decoder found\n");
         return -1;
     }
 
@@ -51,13 +51,13 @@ int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, void* use
 
     ret = avcodec_open2(decoder_ctx, decoder, nullptr);
     if (ret < 0) {
-        fprintf(stderr, "ERROR: failed to open the decoder\n");
+        LC_LOGE("ERROR: failed to open the decoder\n");
         return -1;
     }
     if (decoder_ctx->channel_layout == 0) {
         decoder_ctx->channel_layout = av_get_default_channel_layout(decoder_ctx->channels);
     }
-    printf(
+    LC_LOGD(
         "DEBUG: Setting up decoder - sample format: %s, sample rate: %d Hz, "
         "channels: %d \n",
         av_get_sample_fmt_name(static_cast<AVSampleFormat>(stream->codecpar->format)),
@@ -107,4 +107,3 @@ int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, void* use
 
     return 0;
 }
-

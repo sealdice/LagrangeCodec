@@ -64,8 +64,19 @@ function(append_dependencies out)
         else()
             # first look in ${path} specifically to ensure we find the right release/debug variant
             find_library(FFMPEG_DEPENDENCY_${lib_name}_${config} NAMES "${lib_name}" PATHS "${path}" NO_DEFAULT_PATH)
-            # if not found there, must be a system dependency, so look elsewhere
-            find_library(FFMPEG_DEPENDENCY_${lib_name}_${config} NAMES "${lib_name}" REQUIRED)
+
+            if(NOT FFMPEG_DEPENDENCY_${lib_name}_${config})
+                if(ANDROID)
+                    find_library(FFMPEG_DEPENDENCY_${lib_name}_${config} NAMES "${lib_name}" PATHS ${CMAKE_FIND_ROOT_PATH} NO_DEFAULT_PATH)
+                    if(NOT FFMPEG_DEPENDENCY_${lib_name}_${config})
+                        message(FATAL_ERROR "Failed to resolve Android FFmpeg dependency '${lib_name}' inside the target sysroot")
+                    endif()
+                else()
+                    # If not found there, it must be a system dependency, so look elsewhere.
+                    find_library(FFMPEG_DEPENDENCY_${lib_name}_${config} NAMES "${lib_name}" REQUIRED)
+                endif()
+            endif()
+
             list(APPEND ${out} "${FFMPEG_DEPENDENCY_${lib_name}_${config}}")
         endif()
     endforeach()
