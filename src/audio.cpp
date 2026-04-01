@@ -80,8 +80,11 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
     };
 
     if (!audio_data || data_len <= 0 || !callback) {
+        LC_LOGE("audio_to_pcm invalid args data=%p len=%d callback=%p userdata=%p", audio_data, data_len, callback, userdata);
         return LAGRANGECODEC_ERROR_INVALID_ARGUMENT;
     }
+
+    LC_LOGI("audio_to_pcm enter data=%p len=%d callback=%p userdata=%p", audio_data, data_len, callback, userdata);
 
     if (create_format_context(audio_data, data_len, &format_context) != LAGRANGECODEC_OK) {
         LC_LOGE("ERROR: failed to create format context\n");
@@ -90,14 +93,15 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
 
     ret = avformat_open_input(&format_context, nullptr, nullptr, nullptr);
     if (ret < 0) {
-        LC_LOGE("ERROR: failed to open input\n");
+        LC_LOGE("ERROR: failed to open input ret=%d", ret);
         result = LAGRANGECODEC_ERROR_OPEN_INPUT_FAILED;
         goto cleanup;
     }
+    LC_LOGI("audio_to_pcm avformat_open_input ok context=%p streams=%u", format_context, format_context ? format_context->nb_streams : 0);
 
     ret = avformat_find_stream_info(format_context, nullptr);
     if (ret < 0) {
-        LC_LOGE("ERROR: failed to stream info\n");
+        LC_LOGE("ERROR: failed to stream info ret=%d", ret);
         result = LAGRANGECODEC_ERROR_STREAM_INFO_FAILED;
         goto cleanup;
     }
@@ -105,23 +109,26 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
     LC_LOGD("DEBUG: number of streams found: %d\n", format_context->nb_streams);
     stream_index = av_find_best_stream(format_context, AVMEDIA_TYPE_AUDIO, -1, -1, nullptr, 0);
     if (stream_index < 0) {
-        LC_LOGE("ERROR: no audio stream found\n");
+        LC_LOGE("ERROR: no audio stream found ret=%d", stream_index);
         result = LAGRANGECODEC_ERROR_STREAM_NOT_FOUND;
         goto cleanup;
     }
+    LC_LOGI("audio_to_pcm selected stream_index=%d", stream_index);
 
     stream = format_context->streams[stream_index];
     if (!stream || !stream->codecpar) {
+        LC_LOGE("audio_to_pcm invalid stream/codecpar stream=%p codecpar=%p", stream, stream ? stream->codecpar : nullptr);
         result = LAGRANGECODEC_ERROR_STREAM_NOT_FOUND;
         goto cleanup;
     }
 
     decoder = avcodec_find_decoder(stream->codecpar->codec_id);
     if (!decoder) {
-        LC_LOGE("ERROR: no decoder found\n");
+        LC_LOGE("ERROR: no decoder found codec_id=%d", stream->codecpar->codec_id);
         result = LAGRANGECODEC_ERROR_CODEC_NOT_FOUND;
         goto cleanup;
     }
+    LC_LOGI("audio_to_pcm decoder=%s codec_id=%d", decoder->name ? decoder->name : "(null)", stream->codecpar->codec_id);
 
     decoder_ctx = avcodec_alloc_context3(decoder);
     if (!decoder_ctx) {
@@ -137,7 +144,7 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
 
     ret = avcodec_open2(decoder_ctx, decoder, nullptr);
     if (ret < 0) {
-        LC_LOGE("ERROR: failed to open the decoder\n");
+        LC_LOGE("ERROR: failed to open the decoder ret=%d", ret);
         result = LAGRANGECODEC_ERROR_CODEC_OPEN_FAILED;
         goto cleanup;
     }
@@ -154,6 +161,7 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
         "channels: %d \n",
         av_get_sample_fmt_name(static_cast<AVSampleFormat>(stream->codecpar->format)),
         stream->codecpar->sample_rate, stream->codecpar->channels);
+    LC_LOGI("audio_to_pcm decoder_ctx sample_rate=%d channels=%d channel_layout=%lld sample_fmt=%d", decoder_ctx->sample_rate, decoder_ctx->channels, static_cast<long long>(decoder_ctx->channel_layout), decoder_ctx->sample_fmt);
 
     packet = av_packet_alloc();
     frame = av_frame_alloc();
@@ -175,17 +183,21 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
     );
 
     if (!swr_context) {
+        LC_LOGE("audio_to_pcm swr_alloc_set_opts returned null");
         result = LAGRANGECODEC_ERROR_ALLOCATION_FAILED;
         goto cleanup;
     }
 
     ret = swr_init(swr_context);
     if (ret < 0) {
+        LC_LOGE("audio_to_pcm swr_init failed ret=%d", ret);
         result = LAGRANGECODEC_ERROR_CONVERSION_FAILED;
         goto cleanup;
     }
+    LC_LOGI("audio_to_pcm swr_init ok");
 
     while ((ret = av_read_frame(format_context, packet)) == 0) {
+        LC_LOGI("audio_to_pcm av_read_frame stream=%d size=%d", packet->stream_index, packet->size);
         if (packet->stream_index != stream_index) {
             av_packet_unref(packet);
             continue;
@@ -194,6 +206,7 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
         ret = avcodec_send_packet(decoder_ctx, packet);
         av_packet_unref(packet);
         if (ret < 0) {
+            LC_LOGE("audio_to_pcm avcodec_send_packet failed ret=%d", ret);
             result = LAGRANGECODEC_ERROR_DECODE_FAILED;
             goto cleanup;
         }
@@ -201,14 +214,19 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
         while (true) {
             ret = avcodec_receive_frame(decoder_ctx, frame);
             if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+                LC_LOGI("audio_to_pcm receive_frame pause ret=%d", ret);
                 break;
             }
             if (ret < 0) {
+                LC_LOGE("audio_to_pcm avcodec_receive_frame failed ret=%d", ret);
                 result = LAGRANGECODEC_ERROR_DECODE_FAILED;
                 goto cleanup;
             }
 
+            LC_LOGI("audio_to_pcm decoded frame nb_samples=%d format=%d channels=%d extended_data=%p", frame->nb_samples, frame->format, frame->channels, frame->extended_data);
+
             result = emit_converted_frame(frame);
+            LC_LOGI("audio_to_pcm emit_converted_frame result=%d", result);
             av_frame_unref(frame);
             if (result != LAGRANGECODEC_OK) {
                 goto cleanup;
@@ -217,12 +235,16 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
     }
 
     if (ret != AVERROR_EOF) {
+        LC_LOGE("audio_to_pcm av_read_frame finished ret=%d", ret);
         result = LAGRANGECODEC_ERROR_DECODE_FAILED;
         goto cleanup;
     }
 
+    LC_LOGI("audio_to_pcm draining decoder");
+
     ret = avcodec_send_packet(decoder_ctx, nullptr);
     if (ret < 0 && ret != AVERROR_EOF) {
+        LC_LOGE("audio_to_pcm drain send null packet failed ret=%d", ret);
         result = LAGRANGECODEC_ERROR_DECODE_FAILED;
         goto cleanup;
     }
@@ -230,13 +252,17 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
     while (true) {
         ret = avcodec_receive_frame(decoder_ctx, frame);
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+            LC_LOGI("audio_to_pcm drain complete ret=%d", ret);
             break;
         }
         if (ret < 0) {
+            LC_LOGE("audio_to_pcm drain receive_frame failed ret=%d", ret);
             result = LAGRANGECODEC_ERROR_DECODE_FAILED;
             goto cleanup;
         }
+        LC_LOGI("audio_to_pcm draining decoded frame nb_samples=%d", frame->nb_samples);
         result = emit_converted_frame(frame);
+        LC_LOGI("audio_to_pcm drain emit result=%d", result);
         av_frame_unref(frame);
         if (result != LAGRANGECODEC_OK) {
             goto cleanup;
@@ -244,13 +270,16 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
     }
 
     result = produced_pcm ? LAGRANGECODEC_OK : LAGRANGECODEC_ERROR_DECODE_FAILED;
+    LC_LOGI("audio_to_pcm exit result=%d produced_pcm=%d", result, produced_pcm ? 1 : 0);
 
 cleanup:
+    LC_LOGI("audio_to_pcm cleanup result=%d format_context=%p decoder_ctx=%p packet=%p frame=%p swr=%p", result, format_context, decoder_ctx, packet, frame, swr_context);
     swr_free(&swr_context);
     av_frame_free(&frame);
     av_packet_free(&packet);
     avcodec_free_context(&decoder_ctx);
     destroy_format_context(&format_context);
+    LC_LOGI("audio_to_pcm cleanup done result=%d", result);
 
     return result;
 }

@@ -99,8 +99,11 @@ EXPORT int video_first_frame(uint8_t* video_data, int data_len, uint8_t*& out, i
     out_len = 0;
 
     if (!video_data || data_len <= 0) {
+        LC_LOGE("video_first_frame invalid args data=%p len=%d", video_data, data_len);
         return LAGRANGECODEC_ERROR_INVALID_ARGUMENT;
     }
+
+    LC_LOGI("video_first_frame enter data=%p len=%d", video_data, data_len);
 
     int ret_code = create_format_context(video_data, data_len, &format_context);
     if (ret_code != LAGRANGECODEC_OK) {
@@ -110,16 +113,17 @@ EXPORT int video_first_frame(uint8_t* video_data, int data_len, uint8_t*& out, i
 
     ret_code = avformat_open_input(&format_context, nullptr, nullptr, nullptr);
     if (ret_code < 0) {
-        LC_LOGE("ERROR: failed to open the media stream\n");
+        LC_LOGE("ERROR: failed to open the media stream ret=%d", ret_code);
         result = LAGRANGECODEC_ERROR_OPEN_INPUT_FAILED;
         goto cleanup;
     }
 
     if (avformat_find_stream_info(format_context, nullptr) < 0) {
-        LC_LOGE("ERROR: failed to find stream info\n");
+        LC_LOGE("ERROR: failed to find stream info");
         result = LAGRANGECODEC_ERROR_STREAM_INFO_FAILED;
         goto cleanup;
     }
+    LC_LOGI("video_first_frame stream_count=%u", format_context->nb_streams);
 
     for (unsigned int i = 0; i < format_context->nb_streams; i++) {
         if (format_context->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
@@ -130,10 +134,11 @@ EXPORT int video_first_frame(uint8_t* video_data, int data_len, uint8_t*& out, i
     }
 
     if (video_stream_index == -1) {
-        LC_LOGE("ERROR: no video stream found\n");
+        LC_LOGE("ERROR: no video stream found");
         result = LAGRANGECODEC_ERROR_STREAM_NOT_FOUND;
         goto cleanup;
     }
+    LC_LOGI("video_first_frame selected stream_index=%d codec=%s", video_stream_index, codec && codec->name ? codec->name : "(null)");
 
     if (!codec) {
         result = LAGRANGECODEC_ERROR_CODEC_NOT_FOUND;
@@ -165,10 +170,11 @@ EXPORT int video_first_frame(uint8_t* video_data, int data_len, uint8_t*& out, i
     }
 
     while (av_read_frame(format_context, packet) >= 0) {
+        LC_LOGI("video_first_frame av_read_frame stream=%d size=%d", packet->stream_index, packet->size);
         if (packet->stream_index == video_stream_index) {
             int response = avcodec_send_packet(codec_context, packet);
             if (response < 0) {
-                LC_LOGE("ERROR: failed to send packet\n");
+                LC_LOGE("ERROR: failed to send packet ret=%d", response);
                 av_packet_unref(packet);
                 result = LAGRANGECODEC_ERROR_DECODE_FAILED;
                 goto cleanup;
@@ -176,11 +182,13 @@ EXPORT int video_first_frame(uint8_t* video_data, int data_len, uint8_t*& out, i
 
             response = avcodec_receive_frame(codec_context, frame);
             if (response == 0) { // Frame successfully decoded
+                LC_LOGI("video_first_frame decoded frame width=%d height=%d format=%d", frame->width, frame->height, frame->format);
                 decoded = true;
                 av_packet_unref(packet);
                 break;
             }
             if (response != AVERROR(EAGAIN) && response != AVERROR_EOF) {
+                LC_LOGE("video_first_frame receive_frame failed ret=%d", response);
                 av_packet_unref(packet);
                 result = LAGRANGECODEC_ERROR_DECODE_FAILED;
                 goto cleanup;
@@ -190,6 +198,7 @@ EXPORT int video_first_frame(uint8_t* video_data, int data_len, uint8_t*& out, i
     }
 
     if (!decoded || frame->width <= 0 || frame->height <= 0) {
+        LC_LOGE("video_first_frame decode failed decoded=%d width=%d height=%d", decoded ? 1 : 0, frame ? frame->width : -1, frame ? frame->height : -1);
         result = LAGRANGECODEC_ERROR_DECODE_FAILED;
         goto cleanup;
     }
@@ -231,8 +240,10 @@ EXPORT int video_first_frame(uint8_t* video_data, int data_len, uint8_t*& out, i
 
     sws_scale(sws_context, frame->data, frame->linesize, 0, frame->height, rgb_frame->data, rgb_frame->linesize);
     result = save_frame_as_png(rgb_frame, rgb_frame->width, rgb_frame->height, out, out_len);
+    LC_LOGI("video_first_frame save_frame_as_png result=%d out=%p out_len=%d", result, out, out_len);
 
 cleanup:
+    LC_LOGI("video_first_frame cleanup result=%d format_context=%p codec_context=%p frame=%p rgb_frame=%p packet=%p sws=%p buffer=%p", result, format_context, codec_context, frame, rgb_frame, packet, sws_context, buffer);
     av_free(buffer);
     av_packet_free(&packet);
     av_frame_free(&rgb_frame);
@@ -240,6 +251,7 @@ cleanup:
     sws_freeContext(sws_context);
     avcodec_free_context(&codec_context);
     destroy_format_context(&format_context);
+    LC_LOGI("video_first_frame cleanup done result=%d", result);
 
     return result;
 }
@@ -253,8 +265,11 @@ EXPORT int video_get_size(uint8_t* video_data, int data_len, VideoInfo& info) {
     info = {};
 
     if (!video_data || data_len <= 0) {
+        LC_LOGE("video_get_size invalid args data=%p len=%d", video_data, data_len);
         return LAGRANGECODEC_ERROR_INVALID_ARGUMENT;
     }
+
+    LC_LOGI("video_get_size enter data=%p len=%d", video_data, data_len);
 
     int ret_code = create_format_context(video_data, data_len, &format_context);
     if (ret_code != LAGRANGECODEC_OK) {
@@ -263,14 +278,17 @@ EXPORT int video_get_size(uint8_t* video_data, int data_len, VideoInfo& info) {
 
     ret_code = avformat_open_input(&format_context, nullptr, nullptr, nullptr);
     if (ret_code < 0) {
+        LC_LOGE("video_get_size avformat_open_input failed ret=%d", ret_code);
         result = LAGRANGECODEC_ERROR_OPEN_INPUT_FAILED;
         goto cleanup;
     }
 
     if (avformat_find_stream_info(format_context, nullptr) < 0) {
+        LC_LOGE("video_get_size avformat_find_stream_info failed");
         result = LAGRANGECODEC_ERROR_STREAM_INFO_FAILED;
         goto cleanup;
     }
+    LC_LOGI("video_get_size stream_count=%u duration=%lld", format_context->nb_streams, static_cast<long long>(format_context->duration));
 
     for (unsigned int i = 0; i < format_context->nb_streams; i++) {
         if (format_context->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
@@ -281,14 +299,18 @@ EXPORT int video_get_size(uint8_t* video_data, int data_len, VideoInfo& info) {
     }
 
     if (index == -1) {
+        LC_LOGE("video_get_size no video stream found");
         result = LAGRANGECODEC_ERROR_STREAM_NOT_FOUND;
         goto cleanup;
     }
 
     info = { codec_parameters->width, codec_parameters->height, (format_context->duration / AV_TIME_BASE) };
     result = LAGRANGECODEC_OK;
+    LC_LOGI("video_get_size success width=%d height=%d duration=%lld", info.width, info.height, static_cast<long long>(info.duration));
 
 cleanup:
+    LC_LOGI("video_get_size cleanup result=%d format_context=%p index=%d codec_parameters=%p", result, format_context, index, codec_parameters);
     destroy_format_context(&format_context);
+    LC_LOGI("video_get_size cleanup done result=%d", result);
     return result;
 }
