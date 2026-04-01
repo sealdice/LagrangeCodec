@@ -5,6 +5,7 @@
 #ifndef LAGRANGECODEC_UTIL_H
 #define LAGRANGECODEC_UTIL_H
 
+#include "common.h"
 #include "logging.h"
 
 #include <algorithm>

@@ -79,12 +79,16 @@ int save_frame_as_png(AVFrame* frame, int width, int height, uint8_t*& out, int&
 EXPORT int video_first_frame(uint8_t* video_data, int data_len, uint8_t*& out, int& out_len) {
     AVFormatContext* format_context = nullptr;
     AVCodecContext* codec_context = nullptr;
+    const AVCodec* codec = nullptr;
     AVFrame* frame = nullptr;
     AVFrame* rgb_frame = nullptr;
     AVPacket* packet = nullptr;
     SwsContext* sws_context = nullptr;
     uint8_t* buffer = nullptr;
     int result = LAGRANGECODEC_ERROR_DECODE_FAILED;
+    int video_stream_index = -1;
+    bool decoded = false;
+    int num_bytes = 0;
 
     out = nullptr;
     out_len = 0;
@@ -112,8 +116,6 @@ EXPORT int video_first_frame(uint8_t* video_data, int data_len, uint8_t*& out, i
         goto cleanup;
     }
 
-    const AVCodec *codec = nullptr;
-    int video_stream_index = -1;
     for (unsigned int i = 0; i < format_context->nb_streams; i++) {
         if (format_context->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
             video_stream_index = i;
@@ -156,8 +158,6 @@ EXPORT int video_first_frame(uint8_t* video_data, int data_len, uint8_t*& out, i
         result = LAGRANGECODEC_ERROR_ALLOCATION_FAILED;
         goto cleanup;
     }
-
-    bool decoded = false;
 
     while (av_read_frame(format_context, packet) >= 0) {
         if (packet->stream_index == video_stream_index) {
@@ -203,7 +203,7 @@ EXPORT int video_first_frame(uint8_t* video_data, int data_len, uint8_t*& out, i
     rgb_frame->height = frame->height;
     rgb_frame->format = AV_PIX_FMT_RGB24;
 
-    int num_bytes = av_image_get_buffer_size(AV_PIX_FMT_RGB24, frame->width, frame->height, 1);
+    num_bytes = av_image_get_buffer_size(AV_PIX_FMT_RGB24, frame->width, frame->height, 1);
     if (num_bytes <= 0) {
         result = LAGRANGECODEC_ERROR_OUTPUT_FAILED;
         goto cleanup;

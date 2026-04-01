@@ -14,11 +14,14 @@ extern "C" {
 EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, void* userdata) {
     AVFormatContext* format_context = nullptr;
     AVCodecContext* decoder_ctx = nullptr;
+    const AVStream* stream = nullptr;
+    const AVCodec* decoder = nullptr;
     AVPacket* packet = nullptr;
     AVFrame* frame = nullptr;
     SwrContext* swr_context = nullptr;
     int result = LAGRANGECODEC_ERROR_DECODE_FAILED;
     int ret = 0;
+    int stream_index = -1;
     bool produced_pcm = false;
 
     auto emit_converted_frame = [&](AVFrame* decoded_frame) -> int {
@@ -98,20 +101,20 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
     }
 
     LC_LOGD("DEBUG: number of streams found: %d\n", format_context->nb_streams);
-    const int stream_index = av_find_best_stream(format_context, AVMEDIA_TYPE_AUDIO, -1, -1, nullptr, 0);
+    stream_index = av_find_best_stream(format_context, AVMEDIA_TYPE_AUDIO, -1, -1, nullptr, 0);
     if (stream_index < 0) {
         LC_LOGE("ERROR: no audio stream found\n");
         result = LAGRANGECODEC_ERROR_STREAM_NOT_FOUND;
         goto cleanup;
     }
 
-    const AVStream *stream = format_context->streams[stream_index];
+    stream = format_context->streams[stream_index];
     if (!stream || !stream->codecpar) {
         result = LAGRANGECODEC_ERROR_STREAM_NOT_FOUND;
         goto cleanup;
     }
 
-    const AVCodec *decoder = avcodec_find_decoder(stream->codecpar->codec_id);
+    decoder = avcodec_find_decoder(stream->codecpar->codec_id);
     if (!decoder) {
         LC_LOGE("ERROR: no decoder found\n");
         result = LAGRANGECODEC_ERROR_CODEC_NOT_FOUND;
