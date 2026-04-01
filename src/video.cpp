@@ -44,33 +44,38 @@ int save_frame_as_png(AVFrame* frame, int width, int height, uint8_t*& out, int&
         return LAGRANGECODEC_ERROR_CODEC_OPEN_FAILED;
     }
 
-    AVPacket pkt;
-    av_init_packet(&pkt);
+    AVPacket* pkt = av_packet_alloc();
+    if (!pkt) {
+        avcodec_free_context(&codec_context);
+        return LAGRANGECODEC_ERROR_ALLOCATION_FAILED;
+    }
 
     int ret = avcodec_send_frame(codec_context, frame);
     if (ret < 0) {
         LC_LOGE("ERROR: Failed to send frame to encoder\n");
+        av_packet_free(&pkt);
         avcodec_free_context(&codec_context);
         return LAGRANGECODEC_ERROR_DECODE_FAILED;
     }
 
-    ret = avcodec_receive_packet(codec_context, &pkt); // Receive the encoded PNG packet
+    ret = avcodec_receive_packet(codec_context, pkt); // Receive the encoded PNG packet
     if (ret < 0) {
         LC_LOGE("ERROR: Failed to receive packet\n");
+        av_packet_free(&pkt);
         avcodec_free_context(&codec_context);
         return LAGRANGECODEC_ERROR_OUTPUT_FAILED;
     }
 
-    out_len = pkt.size;
+    out_len = pkt->size;
     out = static_cast<uint8_t*>(av_malloc(out_len));
     if (!out) {
-        av_packet_unref(&pkt);
+        av_packet_free(&pkt);
         avcodec_free_context(&codec_context);
         return LAGRANGECODEC_ERROR_ALLOCATION_FAILED;
     }
-    memcpy(out, pkt.data, out_len);
+    memcpy(out, pkt->data, out_len);
 
-    av_packet_unref(&pkt);
+    av_packet_free(&pkt);
     avcodec_free_context(&codec_context);
 
     return LAGRANGECODEC_OK;
@@ -174,6 +179,11 @@ EXPORT int video_first_frame(uint8_t* video_data, int data_len, uint8_t*& out, i
                 decoded = true;
                 av_packet_unref(packet);
                 break;
+            }
+            if (response != AVERROR(EAGAIN) && response != AVERROR_EOF) {
+                av_packet_unref(packet);
+                result = LAGRANGECODEC_ERROR_DECODE_FAILED;
+                goto cleanup;
             }
         }
         av_packet_unref(packet);
