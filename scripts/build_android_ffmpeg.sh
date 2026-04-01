@@ -3,10 +3,13 @@
 set -euo pipefail
 
 ANDROID_NDK_HOME="${1:?ANDROID_NDK_HOME is required}"
-OUT_ROOT="${2:?output root is required}"
+OUT_ROOT_INPUT="${2:?output root is required}"
 FFMPEG_VERSION="${FFMPEG_VERSION:-5.0}"
 API="${ANDROID_PLATFORM:-21}"
 ABI="${ANDROID_ABI:-arm64-v8a}"
+
+mkdir -p "${OUT_ROOT_INPUT}"
+OUT_ROOT="$(cd "${OUT_ROOT_INPUT}" && pwd)"
 
 if [[ "${ABI}" != "arm64-v8a" ]]; then
   echo "Only arm64-v8a is supported by this script" >&2
