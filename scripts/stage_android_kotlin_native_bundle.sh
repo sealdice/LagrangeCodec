@@ -33,6 +33,7 @@ if [ -z "${RANLIB_BIN}" ]; then
 fi
 
 mkdir -p "${OUT_DIR}/lib" "${OUT_DIR}/include/public"
+mkdir -p "${OUT_DIR}/bin"
 
 cp -f "${BUILD_DIR}/libLagrangeCodec.a" "${OUT_DIR}/lib/"
 
@@ -94,6 +95,10 @@ mv -f "${merged_archive_tmp}" "${OUT_DIR}/lib/libLagrangeCodec.a"
 cp -f "${PUBLIC_INCLUDE_DIR}"/*.h "${OUT_DIR}/include/public/"
 cp -f "docs/android-arm64-kotlin-native.md" "${OUT_DIR}/README.md"
 
+if [ -f "${BUILD_DIR}/android_runtime_smoke" ]; then
+  cp -f "${BUILD_DIR}/android_runtime_smoke" "${OUT_DIR}/bin/"
+fi
+
 cat > "${OUT_DIR}/link-order.txt" <<'EOF'
 libLagrangeCodec.a
 EOF
@@ -121,6 +126,9 @@ Expected files:
 - libswresample.a
 - libswscale.a
 - libz.a
+
+Optional smoke binary (when present):
+- bin/android_runtime_smoke
 
 Keep the Kotlin/Native linker opts aligned with kotlin-native-linker-opts.txt.
 EOF

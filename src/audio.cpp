@@ -23,6 +23,7 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
     AVCodecContext* decoder_ctx = nullptr;
     const AVStream* stream = nullptr;
     const AVCodec* decoder = nullptr;
+    AVCodecParserContext* parser = nullptr;
     AVPacket* packet = nullptr;
     AVFrame* frame = nullptr;
     SwrContext* swr_context = nullptr;
@@ -30,6 +31,7 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
     int ret = 0;
     int stream_index = -1;
     bool produced_pcm = false;
+    bool used_android_parser = false;
 
     auto ensure_swr_context = [&](AVFrame* decoded_frame) -> int {
         if (swr_context) {
@@ -338,22 +340,114 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
     }
 
 #if defined(__ANDROID__)
-    if (format_context && format_context->pb) {
-        LC_TRACE_POINT("PROBE audio_to_pcm before avio_seek reset");
-        ret = static_cast<int>(avio_seek(format_context->pb, 0, SEEK_SET));
+    parser = av_parser_init(stream->codecpar->codec_id);
+    {
+        char probe_buffer[128];
+        int probe_len = std::snprintf(probe_buffer, sizeof(probe_buffer), "PROBE audio_to_pcm after parser_init parser=%p\n", parser);
+        if (probe_len > 0) {
+            lc_trace_buffer(probe_buffer, static_cast<size_t>(probe_len));
+        }
+    }
+    if (!parser) {
+        LC_LOGE("audio_to_pcm av_parser_init failed codec_id=%d", stream->codecpar->codec_id);
+        result = LAGRANGECODEC_ERROR_CODEC_OPEN_FAILED;
+        goto cleanup;
+    }
+    used_android_parser = true;
+
+    const uint8_t* parse_data = audio_data;
+    int parse_bytes_remaining = data_len;
+    while (parse_bytes_remaining > 0) {
+        packet->data = nullptr;
+        packet->size = 0;
+
+        LC_TRACE_POINT("PROBE audio_to_pcm before parser_parse2");
+        ret = av_parser_parse2(
+            parser,
+            decoder_ctx,
+            &packet->data,
+            &packet->size,
+            parse_data,
+            parse_bytes_remaining,
+            AV_NOPTS_VALUE,
+            AV_NOPTS_VALUE,
+            0
+        );
         {
             char probe_buffer[128];
-            int probe_len = std::snprintf(probe_buffer, sizeof(probe_buffer), "PROBE audio_to_pcm after avio_seek reset ret=%d\n", ret);
+            int probe_len = std::snprintf(probe_buffer, sizeof(probe_buffer), "PROBE audio_to_pcm after parser_parse2 ret=%d packet_size=%d remaining=%d\n", ret, packet->size, parse_bytes_remaining);
             if (probe_len > 0) {
                 lc_trace_buffer(probe_buffer, static_cast<size_t>(probe_len));
             }
         }
-        if (ret >= 0) {
-            avformat_flush(format_context);
-            LC_TRACE_POINT("PROBE audio_to_pcm after avformat_flush");
+
+        if (ret < 0) {
+            LC_LOGE("audio_to_pcm av_parser_parse2 failed ret=%d", ret);
+            result = LAGRANGECODEC_ERROR_DECODE_FAILED;
+            goto cleanup;
         }
+
+        if (ret == 0 && packet->size <= 0) {
+            LC_LOGE("audio_to_pcm parser made no progress remaining=%d", parse_bytes_remaining);
+            result = LAGRANGECODEC_ERROR_DECODE_FAILED;
+            goto cleanup;
+        }
+
+        parse_data += ret;
+        parse_bytes_remaining -= ret;
+        if (packet->size <= 0) {
+            continue;
+        }
+
+        LC_TRACE_POINT("PROBE audio_to_pcm before send_packet");
+        ret = avcodec_send_packet(decoder_ctx, packet);
+        {
+            char probe_buffer[128];
+            int probe_len = std::snprintf(probe_buffer, sizeof(probe_buffer), "PROBE audio_to_pcm after send_packet ret=%d\n", ret);
+            if (probe_len > 0) {
+                lc_trace_buffer(probe_buffer, static_cast<size_t>(probe_len));
+            }
+        }
+        av_packet_unref(packet);
+        if (ret < 0) {
+            LC_LOGE("audio_to_pcm avcodec_send_packet failed ret=%d", ret);
+            result = LAGRANGECODEC_ERROR_DECODE_FAILED;
+            goto cleanup;
+        }
+
+        while (true) {
+            ret = avcodec_receive_frame(decoder_ctx, frame);
+            {
+                char probe_buffer[128];
+                int probe_len = std::snprintf(probe_buffer, sizeof(probe_buffer), "PROBE audio_to_pcm after receive_frame ret=%d\n", ret);
+                if (probe_len > 0) {
+                    lc_trace_buffer(probe_buffer, static_cast<size_t>(probe_len));
+                }
+            }
+            if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+                LC_LOGI("audio_to_pcm receive_frame pause ret=%d", ret);
+                break;
+            }
+            if (ret < 0) {
+                LC_LOGE("audio_to_pcm avcodec_receive_frame failed ret=%d", ret);
+                result = LAGRANGECODEC_ERROR_DECODE_FAILED;
+                goto cleanup;
+            }
+
+            LC_LOGI("audio_to_pcm decoded frame nb_samples=%d format=%d channels=%d extended_data=%p", frame->nb_samples, frame->format, frame->channels, frame->extended_data);
+
+            result = emit_converted_frame(frame);
+            LC_LOGI("audio_to_pcm emit_converted_frame result=%d", result);
+            av_frame_unref(frame);
+            if (result != LAGRANGECODEC_OK) {
+                goto cleanup;
+            }
+        }
+
+        av_packet_unref(packet);
     }
-#endif
+
+#else
 
     while (true) {
         LC_TRACE_POINT("PROBE audio_to_pcm before av_read_frame");
@@ -421,6 +515,12 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
         }
     }
 
+#endif
+
+    if (used_android_parser) {
+        ret = AVERROR_EOF;
+    }
+
     if (ret != AVERROR_EOF) {
         LC_LOGE("audio_to_pcm av_read_frame finished ret=%d", ret);
         result = LAGRANGECODEC_ERROR_DECODE_FAILED;
@@ -462,6 +562,7 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
 cleanup:
     LC_TRACE_POINT("TRACE audio_to_pcm:cleanup");
     LC_LOGI("audio_to_pcm cleanup result=%d format_context=%p decoder_ctx=%p packet=%p frame=%p swr=%p", result, format_context, decoder_ctx, packet, frame, swr_context);
+    av_parser_close(parser);
     swr_free(&swr_context);
     av_frame_free(&frame);
     av_packet_free(&packet);

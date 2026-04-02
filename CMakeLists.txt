@@ -7,6 +7,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # Default builds keep producing the shared library as before. Static builds are
 # used by the dedicated CI workflow (and by consumers who want a .a archive).
 option(LAGRANGECODEC_BUILD_SHARED "Build LagrangeCodec as a shared library" ON)
+option(LAGRANGECODEC_BUILD_ANDROID_RUNTIME_SMOKE "Build the minimal Android runtime smoke executable" ${ANDROID})
 if (ANDROID AND NOT LAGRANGECODEC_BUILD_SHARED)
     set(CMAKE_NINJA_FORCE_RESPONSE_FILE ON)
 endif()
@@ -136,6 +137,15 @@ if (ANDROID AND NOT LAGRANGECODEC_BUILD_SHARED)
     )
 else()
     target_link_libraries(LagrangeCodec PUBLIC ${FFMPEG_LIBRARIES} ZLIB::ZLIB)
+endif()
+
+if (ANDROID AND NOT LAGRANGECODEC_BUILD_SHARED AND LAGRANGECODEC_BUILD_ANDROID_RUNTIME_SMOKE)
+    add_executable(android_runtime_smoke tests/android_runtime_smoke.cpp)
+    target_include_directories(android_runtime_smoke PRIVATE ${CMAKE_SOURCE_DIR}/include/public)
+    target_link_libraries(android_runtime_smoke PRIVATE LagrangeCodec)
+    set_target_properties(android_runtime_smoke PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    )
 endif()
 
 include(CTest)
