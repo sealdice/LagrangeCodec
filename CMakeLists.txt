@@ -10,7 +10,16 @@ option(LAGRANGECODEC_BUILD_SHARED "Build LagrangeCodec as a shared library" ON)
 option(LAGRANGECODEC_BUILD_ANDROID_RUNTIME_SMOKE "Build the minimal Android runtime smoke executable" OFF)
 set(LAGRANGECODEC_NATIVE_PREFIX "" CACHE PATH "Prefix containing prebuilt FFmpeg/zlib static libraries")
 set(LAGRANGECODEC_LINK_ZLIB ON)
-if (LINUX)
+set(LAGRANGECODEC_TARGET_IS_ANDROID OFF)
+if (ANDROID)
+    set(LAGRANGECODEC_TARGET_IS_ANDROID ON)
+elseif (DEFINED CMAKE_C_COMPILER_TARGET AND CMAKE_C_COMPILER_TARGET MATCHES "android")
+    set(LAGRANGECODEC_TARGET_IS_ANDROID ON)
+elseif (DEFINED CMAKE_CXX_COMPILER_TARGET AND CMAKE_CXX_COMPILER_TARGET MATCHES "android")
+    set(LAGRANGECODEC_TARGET_IS_ANDROID ON)
+endif()
+
+if (LINUX AND NOT LAGRANGECODEC_TARGET_IS_ANDROID)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wl,-Bsymbolic")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wl,-Bsymbolic")
 endif()
@@ -31,6 +40,9 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(silk_fetch)
 message(STATUS "SILK source code will be downloaded to: ${silk_fetch_SOURCE_DIR}")
 
+set(FFMPEG_LINK_ITEMS "")
+set(LAGRANGECODEC_NATIVE_SYSTEM_LIBS "")
+
 if (LAGRANGECODEC_NATIVE_PREFIX)
     set(native_include_dir "${LAGRANGECODEC_NATIVE_PREFIX}/include")
     set(native_lib_dir "${LAGRANGECODEC_NATIVE_PREFIX}/lib")
@@ -39,6 +51,7 @@ if (LAGRANGECODEC_NATIVE_PREFIX)
     set(FFMPEG_LIBRARY_DIRS "${native_lib_dir}")
     if (EXISTS "${native_lib_dir}/libffmpeg.a")
         set(FFMPEG_LIBRARIES "${native_lib_dir}/libffmpeg.a")
+        set(FFMPEG_LINK_ITEMS "${FFMPEG_LIBRARIES}")
         set(LAGRANGECODEC_LINK_ZLIB OFF)
     else()
         set(FFMPEG_LIBRARIES
@@ -55,23 +68,35 @@ if (LAGRANGECODEC_NATIVE_PREFIX)
             endif()
         endforeach()
 
+        string(JOIN "," FFMPEG_GROUP_LIBRARIES ${FFMPEG_LIBRARIES})
+        set(FFMPEG_LINK_ITEMS "$<LINK_GROUP:RESCAN,${FFMPEG_GROUP_LIBRARIES}>")
+
         set(zlib_archive "${native_lib_dir}/libz.a")
         if (NOT EXISTS "${zlib_archive}" AND EXISTS "${native_lib_dir}/libzlib.a")
             set(zlib_archive "${native_lib_dir}/libzlib.a")
         endif()
-        if (NOT EXISTS "${zlib_archive}")
+
+        if (EXISTS "${zlib_archive}")
+            add_library(ZLIB::ZLIB STATIC IMPORTED GLOBAL)
+            set_target_properties(ZLIB::ZLIB PROPERTIES
+                IMPORTED_LOCATION "${zlib_archive}"
+                INTERFACE_INCLUDE_DIRECTORIES "${native_include_dir}"
+            )
+        elseif (LAGRANGECODEC_TARGET_IS_ANDROID)
+            set(LAGRANGECODEC_LINK_ZLIB OFF)
+            list(APPEND LAGRANGECODEC_NATIVE_SYSTEM_LIBS z)
+        else()
             message(FATAL_ERROR "Missing zlib archive under ${native_lib_dir}")
         endif()
+    endif()
 
-        add_library(ZLIB::ZLIB STATIC IMPORTED GLOBAL)
-        set_target_properties(ZLIB::ZLIB PROPERTIES
-            IMPORTED_LOCATION "${zlib_archive}"
-            INTERFACE_INCLUDE_DIRECTORIES "${native_include_dir}"
-        )
+    if (LAGRANGECODEC_TARGET_IS_ANDROID)
+        list(APPEND LAGRANGECODEC_NATIVE_SYSTEM_LIBS m atomic android mediandk)
     endif()
 else()
     find_package(FFMPEG REQUIRED)
     find_package(ZLIB REQUIRED)
+    set(FFMPEG_LINK_ITEMS ${FFMPEG_LIBRARIES})
 endif()
 
 file(GLOB SOURCES CONFIGURE_DEPENDS "src/*.cpp")
@@ -105,10 +130,12 @@ target_sources(LagrangeCodec PRIVATE ${SILK_SRC_FILES})
 
 target_include_directories(LagrangeCodec PUBLIC ${FFMPEG_INCLUDE_DIRS})
 target_link_directories(LagrangeCodec PUBLIC ${FFMPEG_LIBRARY_DIRS})
+target_link_libraries(LagrangeCodec PUBLIC ${FFMPEG_LINK_ITEMS})
 if (LAGRANGECODEC_LINK_ZLIB)
-    target_link_libraries(LagrangeCodec PUBLIC ${FFMPEG_LIBRARIES} ZLIB::ZLIB)
-else()
-    target_link_libraries(LagrangeCodec PUBLIC ${FFMPEG_LIBRARIES})
+    target_link_libraries(LagrangeCodec PUBLIC ZLIB::ZLIB)
+endif()
+if (LAGRANGECODEC_NATIVE_SYSTEM_LIBS)
+    target_link_libraries(LagrangeCodec PUBLIC ${LAGRANGECODEC_NATIVE_SYSTEM_LIBS})
 endif()
 
 if (LAGRANGECODEC_BUILD_ANDROID_RUNTIME_SMOKE)

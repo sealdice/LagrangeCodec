@@ -6,6 +6,11 @@ on:
     branches:
       - zig-android-arm64-clean
 
+env:
+  ZIG_VERSION: 0.14.1
+  FFMPEG_ANDROID_TAG: v7.1-beta.16
+  FFMPEG_ANDROID_ASSET: ffmpeg_android_aarch64_tiny.tar.gz
+
 jobs:
   build-zig-android-arm64:
     runs-on: ubuntu-22.04
@@ -14,12 +19,14 @@ jobs:
 
       - name: Setup Toolchains
         run: |
-          sudo apt-get update && sudo apt install build-essential cmake ninja-build nasm curl python3 -y
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build curl python3 llvm file
 
       - name: Setup Zig
         run: |
           set -euo pipefail
-          ZIG_URL="https://ziglang.org/download/0.14.1/zig-x86_64-linux-0.14.1.tar.xz"
+          ZIG_URL="https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz"
           ZIG_DIR="$RUNNER_TEMP/zig"
           rm -rf "$ZIG_DIR"
           mkdir -p "$ZIG_DIR"
@@ -29,90 +36,54 @@ jobs:
           echo "ZIG_BIN=$ZIG_DIR/zig" >> "$GITHUB_ENV"
           "$ZIG_DIR/zig" version
 
-      - name: Build Zig Android deps
-        id: build_zig_deps
-        continue-on-error: true
+      - name: Download prebuilt FFmpeg
         run: |
           set -euo pipefail
-          FFMPEG_ZIG_DIR="$RUNNER_TEMP/ffmpeg-zig"
           PREFIX_DIR="$GITHUB_WORKSPACE/build-zig-android-deps/prefix"
-          rm -rf "$FFMPEG_ZIG_DIR" "$PREFIX_DIR"
-          git clone --depth 1 --branch 7.0.1-5 https://github.com/allyourcodebase/ffmpeg.git "$FFMPEG_ZIG_DIR"
-          sed -i 's/\.name = "libffmpeg"/.name = .libffmpeg/' "$FFMPEG_ZIG_DIR/build.zig.zon"
-          sed -i '1a\    .fingerprint = 0x11edc27f71f69571,' "$FFMPEG_ZIG_DIR/build.zig.zon"
-          sed -i '/const libz_dep = b\.dependency("libz"/,/});/d' "$FFMPEG_ZIG_DIR/build.zig"
-          sed -i '/lib\.linkLibrary(libz_dep\.artifact("z"));/d' "$FFMPEG_ZIG_DIR/build.zig"
-          sed -i 's/\.HAVE_ZLIB_GZIP = 1/\.HAVE_ZLIB_GZIP = 0/' "$FFMPEG_ZIG_DIR/build.zig"
-          sed -i 's/\.CONFIG_ZLIB = 1/\.CONFIG_ZLIB = 0/' "$FFMPEG_ZIG_DIR/build.zig"
-          sed -i '/"libavcodec\/zlib_wrapper\.c",/d' "$FFMPEG_ZIG_DIR/build.zig"
-          sed -i '/"-DZLIB_CONST",/d' "$FFMPEG_ZIG_DIR/build.zig"
-          sed -i '/const libmp3lame_dep = b\.dependency("libmp3lame"/,/});/d' "$FFMPEG_ZIG_DIR/build.zig"
-          sed -i '/const libvorbis_dep = b\.dependency("libvorbis"/,/});/d' "$FFMPEG_ZIG_DIR/build.zig"
-          sed -i '/const libogg_dep = b\.dependency("libogg"/,/});/d' "$FFMPEG_ZIG_DIR/build.zig"
-          sed -i '/lib\.linkLibrary(libmp3lame_dep\.artifact("mp3lame"));/d' "$FFMPEG_ZIG_DIR/build.zig"
-          sed -i '/lib\.linkLibrary(libvorbis_dep\.artifact("vorbis"));/d' "$FFMPEG_ZIG_DIR/build.zig"
-          sed -i '/lib\.linkLibrary(libogg_dep\.artifact("ogg"));/d' "$FFMPEG_ZIG_DIR/build.zig"
-          sed -i '/"libavcodec\/libmp3lame\.c",/d' "$FFMPEG_ZIG_DIR/build.zig"
-          sed -i '/"libavcodec\/libvorbisdec\.c",/d' "$FFMPEG_ZIG_DIR/build.zig"
-          sed -i '/"libavcodec\/libvorbisenc\.c",/d' "$FFMPEG_ZIG_DIR/build.zig"
-          sed -i 's|target\.cpu\.arch\.isAARCH64()|switch (target.cpu.arch) { .aarch64, .aarch64_be => true, else => false }|g' "$FFMPEG_ZIG_DIR/build.zig"
-          sed -i 's|target\.cpu\.arch\.isARM()|switch (target.cpu.arch) { .arm, .armeb, .thumb, .thumbeb => true, else => false }|g' "$FFMPEG_ZIG_DIR/build.zig"
-          sed -i 's|target\.cpu\.arch\.isPowerPC()|switch (target.cpu.arch) { .powerpc, .powerpcle, .powerpc64, .powerpc64le => true, else => false }|g' "$FFMPEG_ZIG_DIR/build.zig"
-          sed -i 's|target\.cpu\.arch\.isRISCV()|switch (target.cpu.arch) { .riscv32, .riscv64 => true, else => false }|g' "$FFMPEG_ZIG_DIR/build.zig"
-          sed -i 's|target\.cpu\.arch\.isSPARC()|switch (target.cpu.arch) { .sparc, .sparc64 => true, else => false }|g' "$FFMPEG_ZIG_DIR/build.zig"
-          sed -i 's|target\.cpu\.arch\.isX86()|switch (target.cpu.arch) { .x86, .x86_64 => true, else => false }|g' "$FFMPEG_ZIG_DIR/build.zig"
-          sed -i 's|t\.cpu\.arch\.isAARCH64()|switch (t.cpu.arch) { .aarch64, .aarch64_be => true, else => false }|g' "$FFMPEG_ZIG_DIR/build.zig"
-          sed -i 's|t\.cpu\.arch\.isARM()|switch (t.cpu.arch) { .arm, .armeb, .thumb, .thumbeb => true, else => false }|g' "$FFMPEG_ZIG_DIR/build.zig"
-          sed -i 's|t\.cpu\.arch\.isPowerPC64()|switch (t.cpu.arch) { .powerpc64, .powerpc64le => true, else => false }|g' "$FFMPEG_ZIG_DIR/build.zig"
-          sed -i 's|t\.cpu\.arch\.isPowerPC()|switch (t.cpu.arch) { .powerpc, .powerpcle, .powerpc64, .powerpc64le => true, else => false }|g' "$FFMPEG_ZIG_DIR/build.zig"
-          sed -i 's|t\.cpu\.arch\.isRISCV()|switch (t.cpu.arch) { .riscv32, .riscv64 => true, else => false }|g' "$FFMPEG_ZIG_DIR/build.zig"
-          sed -i 's|t\.cpu\.arch\.isSPARC()|switch (t.cpu.arch) { .sparc, .sparc64 => true, else => false }|g' "$FFMPEG_ZIG_DIR/build.zig"
-          sed -i 's|t\.cpu\.arch\.isX86()|switch (t.cpu.arch) { .x86, .x86_64 => true, else => false }|g' "$FFMPEG_ZIG_DIR/build.zig"
-          cd "$FFMPEG_ZIG_DIR"
-          export ZIG_GLOBAL_CACHE_DIR="$GITHUB_WORKSPACE/.zig-global-cache"
-          mkdir -p "$ZIG_GLOBAL_CACHE_DIR"
-          "$ZIG_BIN" version
-          "$ZIG_BIN" build -j1 -Dtarget=aarch64-linux-android -Doptimize=ReleaseFast -p "$PREFIX_DIR" 2>&1 | tee "$GITHUB_WORKSPACE/build-zig-android-deps.log"
+          EXTRACT_DIR="$GITHUB_WORKSPACE/build-zig-android-deps/extract"
+          ASSET_URL="https://github.com/yearsyan/ffmpeg-android-build/releases/download/${FFMPEG_ANDROID_TAG}/${FFMPEG_ANDROID_ASSET}"
+          rm -rf "$PREFIX_DIR" "$EXTRACT_DIR"
+          mkdir -p "$PREFIX_DIR" "$EXTRACT_DIR"
+          curl -L --fail --retry 5 --retry-all-errors "$ASSET_URL" -o "$RUNNER_TEMP/${FFMPEG_ANDROID_ASSET}"
+          tar -xzf "$RUNNER_TEMP/${FFMPEG_ANDROID_ASSET}" -C "$EXTRACT_DIR"
+          ROOT_DIR="$(find "$EXTRACT_DIR" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+          test -n "$ROOT_DIR"
+          cp -a "$ROOT_DIR"/. "$PREFIX_DIR"/
+          find "$PREFIX_DIR/lib" -maxdepth 1 -name '*.a' -printf '%f\n' | sort
 
-      - name: Summarize Zig deps log
-        if: always()
+      - name: Verify prebuilt FFmpeg archives
         run: |
           set -euo pipefail
-          {
-            echo '## Build Zig Android deps'
-            if [ -f build-zig-android-deps.log ]; then
-              echo ''
-              echo '### First 120 lines'
-              echo '```text'
-              sed -n '1,120p' build-zig-android-deps.log
-              echo '```'
-              echo ''
-              echo '### Last 120 lines'
-              echo '```text'
-              tail -n 120 build-zig-android-deps.log
-              echo '```'
-            else
-              echo 'No build-zig-android-deps.log was produced.'
+          PREFIX_DIR="$GITHUB_WORKSPACE/build-zig-android-deps/prefix"
+          REQUIRED_LIBS=(libavformat.a libavcodec.a libswresample.a libswscale.a libavutil.a)
+          for name in "${REQUIRED_LIBS[@]}"; do
+            test -f "$PREFIX_DIR/lib/$name"
+          done
+
+          NM_BIN="$(command -v llvm-nm || command -v nm)"
+          bad=0
+          for name in "${REQUIRED_LIBS[@]}"; do
+            lib="$PREFIX_DIR/lib/$name"
+            undefined="$($NM_BIN -u "$lib" 2>/dev/null || true)"
+
+            if printf '%s\n' "$undefined" | grep -E '(__read_chk|__vsnprintf_chk|__write_chk|(^|[^[:alnum:]_])stderr([^[:alnum:]_]|$))' >/dev/null; then
+              echo "Forbidden host/glibc symbol found in $name"
+              printf '%s\n' "$undefined" | grep -E '(__read_chk|__vsnprintf_chk|__write_chk|(^|[^[:alnum:]_])stderr([^[:alnum:]_]|$))' || true
+              bad=1
             fi
-          } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload Zig deps log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: zig-android-deps-log
-          path: build-zig-android-deps.log
+            if printf '%s\n' "$undefined" | grep -E '(^|[^[:alnum:]_])(lame_|dav1d_|aom_)' >/dev/null; then
+              echo "Unexpected external codec dependency found in $name"
+              printf '%s\n' "$undefined" | grep -E '(^|[^[:alnum:]_])(lame_|dav1d_|aom_)' || true
+              bad=1
+            fi
+          done
 
-      - name: Stop if Zig deps failed
-        if: steps.build_zig_deps.outcome == 'failure'
-        run: |
-          if [ -f build-zig-android-deps.log ]; then
-            tail -n 60 build-zig-android-deps.log | while IFS= read -r line; do
-              echo "::error file=.github/workflows/build-zig-android-arm64.yml,line=1::${line}"
-            done
+          if [ "$bad" -ne 0 ]; then
+            exit 1
           fi
-          echo "Build Zig Android deps failed"
-          exit 1
+
+          echo "Using FFmpeg package ${FFMPEG_ANDROID_ASSET} from ${FFMPEG_ANDROID_TAG}"
 
       - name: Prepare Zig compiler wrappers
         run: |
@@ -120,9 +91,10 @@ jobs:
           WRAPPER_DIR="$RUNNER_TEMP/zig-android-bin"
           AR_BIN="$(command -v llvm-ar || command -v ar)"
           RANLIB_BIN="$(command -v llvm-ranlib || command -v ranlib)"
+          rm -rf "$WRAPPER_DIR"
           mkdir -p "$WRAPPER_DIR"
-          printf '%s\n' '#!/usr/bin/env bash' 'exec zig cc -target aarch64-linux-android21 -lc "$@"' > "$WRAPPER_DIR/zig-cc"
-          printf '%s\n' '#!/usr/bin/env bash' 'exec zig c++ -target aarch64-linux-android21 -lc "$@"' > "$WRAPPER_DIR/zig-cxx"
+          printf '%s\n' '#!/usr/bin/env bash' 'exec zig cc -target aarch64-linux-android -D__ANDROID_API__=21 "$@"' > "$WRAPPER_DIR/zig-cc"
+          printf '%s\n' '#!/usr/bin/env bash' 'exec zig c++ -target aarch64-linux-android -D__ANDROID_API__=21 "$@"' > "$WRAPPER_DIR/zig-cxx"
           chmod +x "$WRAPPER_DIR/zig-cc" "$WRAPPER_DIR/zig-cxx"
           echo "WRAPPER_DIR=$WRAPPER_DIR" >> "$GITHUB_ENV"
           echo "AR_BIN=$AR_BIN" >> "$GITHUB_ENV"
@@ -137,15 +109,33 @@ jobs:
             -B build-zig-android \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_SYSTEM_NAME=Linux \
+            -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+            -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY \
             -DCMAKE_C_COMPILER="$WRAPPER_DIR/zig-cc" \
+            -DCMAKE_C_COMPILER_TARGET=aarch64-linux-android \
             -DCMAKE_CXX_COMPILER="$WRAPPER_DIR/zig-cxx" \
+            -DCMAKE_CXX_COMPILER_TARGET=aarch64-linux-android \
             -DCMAKE_AR="$AR_BIN" \
             -DCMAKE_RANLIB="$RANLIB_BIN" \
             -DBUILD_TESTING=OFF \
             -DLAGRANGECODEC_BUILD_SHARED=OFF \
             -DLAGRANGECODEC_BUILD_ANDROID_RUNTIME_SMOKE=ON \
             -DLAGRANGECODEC_NATIVE_PREFIX="$PREFIX_DIR"
-          cmake --build build-zig-android
+          cmake --build build-zig-android --verbose
+
+      - name: Verify Android smoke binary
+        run: |
+          set -euo pipefail
+          BIN="build-zig-android/android_runtime_smoke"
+          test -f "$BIN"
+          file "$BIN"
+          readelf -h "$BIN" | sed -n '1,20p'
+          NM_BIN="$(command -v llvm-nm || command -v nm)"
+          if "$NM_BIN" -u "$BIN" 2>/dev/null | grep -E '(__read_chk|__vsnprintf_chk|__write_chk|(^|[^[:alnum:]_])stderr([^[:alnum:]_]|$))' >/dev/null; then
+            echo "Forbidden host/glibc symbol leaked into android_runtime_smoke"
+            "$NM_BIN" -u "$BIN" 2>/dev/null | grep -E '(__read_chk|__vsnprintf_chk|__write_chk|(^|[^[:alnum:]_])stderr([^[:alnum:]_]|$))' || true
+            exit 1
+          fi
 
       - name: Stage bundle
         run: |
