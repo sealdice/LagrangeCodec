@@ -10,9 +10,27 @@
 #  include <cstdarg>
 #  include <cstdio>
 #  include <cstring>
+#  include <fcntl.h>
+#  include <sys/stat.h>
 #  include <unistd.h>
 
 #  define LAGRANGECODEC_LOG_TAG "LagrangeCodec"
+
+inline void lc_android_file_log(const char* buffer, size_t total_len) {
+    const char* configured = getenv("LAGRANGECODEC_LOG_FILE");
+    const char* primary = (configured && configured[0] != '\0') ? configured : "/data/local/tmp/lagrangecodec-native.log";
+    const char* fallback = "./lagrangecodec-native.log";
+
+    int fd = open(primary, O_CREAT | O_WRONLY | O_APPEND, 0644);
+    if (fd < 0 && std::strcmp(primary, fallback) != 0) {
+        fd = open(fallback, O_CREAT | O_WRONLY | O_APPEND, 0644);
+    }
+
+    if (fd >= 0) {
+        write(fd, buffer, total_len);
+        close(fd);
+    }
+}
 
 inline void lc_android_terminal_log(int priority, const char* level, const char* fmt, ...) {
     char buffer[3072];
@@ -54,6 +72,7 @@ inline void lc_android_terminal_log(int priority, const char* level, const char*
     }
 
     write(STDOUT_FILENO, buffer, total_len);
+    lc_android_file_log(buffer, total_len);
     __android_log_write(priority, LAGRANGECODEC_LOG_TAG, buffer);
 }
 

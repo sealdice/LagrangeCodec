@@ -45,7 +45,7 @@ int main(int argc, char** argv) {
 
     if (mode == "video") {
         VideoInfo info = {};
-        const int ret = video_get_size(const_cast<uint8_t*>(bytes.data()), static_cast<int>(bytes.size()), info);
+        const int ret = video_get_size(const_cast<uint8_t*>(bytes.data()), static_cast<int>(bytes.size()), &info);
         std::cout << "video_get_size returned: " << ret << ", width=" << info.width << ", height=" << info.height << ", duration=" << info.duration << std::endl;
         return ret == 0 ? 0 : 1;
     }

@@ -12,9 +12,13 @@ extern "C" {
 #include "util.h"
 #include "video.h"
 
-int save_frame_as_png(AVFrame* frame, int width, int height, uint8_t*& out, int& out_len) {
-    out = nullptr;
-    out_len = 0;
+int save_frame_as_png(AVFrame* frame, int width, int height, uint8_t** out, int* out_len) {
+    if (!out || !out_len) {
+        return LAGRANGECODEC_ERROR_INVALID_ARGUMENT;
+    }
+
+    *out = nullptr;
+    *out_len = 0;
 
     if (!frame || width <= 0 || height <= 0) {
         return LAGRANGECODEC_ERROR_INVALID_ARGUMENT;
@@ -66,14 +70,14 @@ int save_frame_as_png(AVFrame* frame, int width, int height, uint8_t*& out, int&
         return LAGRANGECODEC_ERROR_OUTPUT_FAILED;
     }
 
-    out_len = pkt->size;
-    out = static_cast<uint8_t*>(av_malloc(out_len));
-    if (!out) {
+    *out_len = pkt->size;
+    *out = static_cast<uint8_t*>(av_malloc(*out_len));
+    if (!*out) {
         av_packet_free(&pkt);
         avcodec_free_context(&codec_context);
         return LAGRANGECODEC_ERROR_ALLOCATION_FAILED;
     }
-    memcpy(out, pkt->data, out_len);
+    memcpy(*out, pkt->data, *out_len);
 
     av_packet_free(&pkt);
     avcodec_free_context(&codec_context);
@@ -81,7 +85,7 @@ int save_frame_as_png(AVFrame* frame, int width, int height, uint8_t*& out, int&
     return LAGRANGECODEC_OK;
 }
 
-EXPORT int video_first_frame(uint8_t* video_data, int data_len, uint8_t*& out, int& out_len) {
+EXPORT int video_first_frame(uint8_t* video_data, int data_len, uint8_t** out, int* out_len) {
     AVFormatContext* format_context = nullptr;
     AVCodecContext* codec_context = nullptr;
     const AVCodec* codec = nullptr;
@@ -95,11 +99,15 @@ EXPORT int video_first_frame(uint8_t* video_data, int data_len, uint8_t*& out, i
     bool decoded = false;
     int num_bytes = 0;
 
-    out = nullptr;
-    out_len = 0;
+    if (out) {
+        *out = nullptr;
+    }
+    if (out_len) {
+        *out_len = 0;
+    }
 
-    if (!video_data || data_len <= 0) {
-        LC_LOGE("video_first_frame invalid args data=%p len=%d", video_data, data_len);
+    if (!video_data || data_len <= 0 || !out || !out_len) {
+        LC_LOGE("video_first_frame invalid args data=%p len=%d out=%p out_len=%p", video_data, data_len, out, out_len);
         return LAGRANGECODEC_ERROR_INVALID_ARGUMENT;
     }
 
@@ -240,7 +248,7 @@ EXPORT int video_first_frame(uint8_t* video_data, int data_len, uint8_t*& out, i
 
     sws_scale(sws_context, frame->data, frame->linesize, 0, frame->height, rgb_frame->data, rgb_frame->linesize);
     result = save_frame_as_png(rgb_frame, rgb_frame->width, rgb_frame->height, out, out_len);
-    LC_LOGI("video_first_frame save_frame_as_png result=%d out=%p out_len=%d", result, out, out_len);
+    LC_LOGI("video_first_frame save_frame_as_png result=%d out=%p out_len=%d", result, out ? *out : nullptr, out_len ? *out_len : -1);
 
 cleanup:
     LC_LOGI("video_first_frame cleanup result=%d format_context=%p codec_context=%p frame=%p rgb_frame=%p packet=%p sws=%p buffer=%p", result, format_context, codec_context, frame, rgb_frame, packet, sws_context, buffer);
@@ -256,16 +264,18 @@ cleanup:
     return result;
 }
 
-EXPORT int video_get_size(uint8_t* video_data, int data_len, VideoInfo& info) {
+EXPORT int video_get_size(uint8_t* video_data, int data_len, VideoInfo* info) {
     AVFormatContext* format_context = nullptr;
     AVCodecParameters* codec_parameters = nullptr;
     int result = LAGRANGECODEC_ERROR_DECODE_FAILED;
     int index = -1;
 
-    info = {};
+    if (info) {
+        *info = {};
+    }
 
-    if (!video_data || data_len <= 0) {
-        LC_LOGE("video_get_size invalid args data=%p len=%d", video_data, data_len);
+    if (!video_data || data_len <= 0 || !info) {
+        LC_LOGE("video_get_size invalid args data=%p len=%d info=%p", video_data, data_len, info);
         return LAGRANGECODEC_ERROR_INVALID_ARGUMENT;
     }
 
@@ -304,9 +314,9 @@ EXPORT int video_get_size(uint8_t* video_data, int data_len, VideoInfo& info) {
         goto cleanup;
     }
 
-    info = { codec_parameters->width, codec_parameters->height, (format_context->duration / AV_TIME_BASE) };
+    *info = { codec_parameters->width, codec_parameters->height, (format_context->duration / AV_TIME_BASE) };
     result = LAGRANGECODEC_OK;
-    LC_LOGI("video_get_size success width=%d height=%d duration=%lld", info.width, info.height, static_cast<long long>(info.duration));
+    LC_LOGI("video_get_size success width=%d height=%d duration=%lld", info->width, info->height, static_cast<long long>(info->duration));
 
 cleanup:
     LC_LOGI("video_get_size cleanup result=%d format_context=%p index=%d codec_parameters=%p", result, format_context, index, codec_parameters);

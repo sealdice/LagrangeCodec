@@ -7,7 +7,15 @@
 
 #include <cstdint>
 
-typedef void (cb_codec)(void* userdata, const uint8_t* p, int len);
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef void (*cb_codec)(void* userdata, const uint8_t* p, int len);
+
+#ifdef __cplusplus
+}
+#endif
 
 #define LAGRANGECODEC_OK 0
 #define LAGRANGECODEC_ERROR_INVALID_ARGUMENT -1
