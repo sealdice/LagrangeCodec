@@ -169,7 +169,7 @@ jobs:
               return 0
             fi
             local content
-            content="$(sed -n '1,120p' "$log_file" | paste -sd '|' - || true)"
+            content="$(tail -n 120 "$log_file" | paste -sd '|' - || true)"
             content="${content//'%'/'%25'}"
             echo "::error file=.github/workflows/build-zig-android-arm64.yml,line=1::${log_file}: ${content}"
           }
