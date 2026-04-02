@@ -26,8 +26,12 @@ jobs:
         continue-on-error: true
         run: |
           set -euo pipefail
-          chmod +x scripts/build_zig_android_deps.sh
-          bash scripts/build_zig_android_deps.sh build-zig-android-deps 2>&1 | tee build-zig-android-deps.log
+          FFMPEG_ZIG_DIR="$RUNNER_TEMP/ffmpeg-zig"
+          PREFIX_DIR="$GITHUB_WORKSPACE/build-zig-android-deps/prefix"
+          rm -rf "$FFMPEG_ZIG_DIR" "$PREFIX_DIR"
+          git clone --depth 1 --branch 7.0.1-5 https://github.com/allyourcodebase/ffmpeg.git "$FFMPEG_ZIG_DIR"
+          cd "$FFMPEG_ZIG_DIR"
+          zig build -Dtarget=aarch64-linux-android -Doptimize=ReleaseFast -p "$PREFIX_DIR" 2>&1 | tee "$GITHUB_WORKSPACE/build-zig-android-deps.log"
 
       - name: Summarize Zig deps log
         if: always()

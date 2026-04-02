@@ -9,6 +9,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 option(LAGRANGECODEC_BUILD_SHARED "Build LagrangeCodec as a shared library" ON)
 option(LAGRANGECODEC_BUILD_ANDROID_RUNTIME_SMOKE "Build the minimal Android runtime smoke executable" OFF)
 set(LAGRANGECODEC_NATIVE_PREFIX "" CACHE PATH "Prefix containing prebuilt FFmpeg/zlib static libraries")
+set(LAGRANGECODEC_LINK_ZLIB ON)
 if (LINUX)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wl,-Bsymbolic")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wl,-Bsymbolic")
@@ -36,33 +37,38 @@ if (LAGRANGECODEC_NATIVE_PREFIX)
 
     set(FFMPEG_INCLUDE_DIRS "${native_include_dir}")
     set(FFMPEG_LIBRARY_DIRS "${native_lib_dir}")
-    set(FFMPEG_LIBRARIES
-        "${native_lib_dir}/libavformat.a"
-        "${native_lib_dir}/libavcodec.a"
-        "${native_lib_dir}/libswresample.a"
-        "${native_lib_dir}/libswscale.a"
-        "${native_lib_dir}/libavutil.a"
-    )
+    if (EXISTS "${native_lib_dir}/libffmpeg.a")
+        set(FFMPEG_LIBRARIES "${native_lib_dir}/libffmpeg.a")
+        set(LAGRANGECODEC_LINK_ZLIB OFF)
+    else()
+        set(FFMPEG_LIBRARIES
+            "${native_lib_dir}/libavformat.a"
+            "${native_lib_dir}/libavcodec.a"
+            "${native_lib_dir}/libswresample.a"
+            "${native_lib_dir}/libswscale.a"
+            "${native_lib_dir}/libavutil.a"
+        )
 
-    foreach(required_file IN LISTS FFMPEG_LIBRARIES)
-        if (NOT EXISTS "${required_file}")
-            message(FATAL_ERROR "Missing FFmpeg archive: ${required_file}")
+        foreach(required_file IN LISTS FFMPEG_LIBRARIES)
+            if (NOT EXISTS "${required_file}")
+                message(FATAL_ERROR "Missing FFmpeg archive: ${required_file}")
+            endif()
+        endforeach()
+
+        set(zlib_archive "${native_lib_dir}/libz.a")
+        if (NOT EXISTS "${zlib_archive}" AND EXISTS "${native_lib_dir}/libzlib.a")
+            set(zlib_archive "${native_lib_dir}/libzlib.a")
         endif()
-    endforeach()
+        if (NOT EXISTS "${zlib_archive}")
+            message(FATAL_ERROR "Missing zlib archive under ${native_lib_dir}")
+        endif()
 
-    set(zlib_archive "${native_lib_dir}/libz.a")
-    if (NOT EXISTS "${zlib_archive}" AND EXISTS "${native_lib_dir}/libzlib.a")
-        set(zlib_archive "${native_lib_dir}/libzlib.a")
+        add_library(ZLIB::ZLIB STATIC IMPORTED GLOBAL)
+        set_target_properties(ZLIB::ZLIB PROPERTIES
+            IMPORTED_LOCATION "${zlib_archive}"
+            INTERFACE_INCLUDE_DIRECTORIES "${native_include_dir}"
+        )
     endif()
-    if (NOT EXISTS "${zlib_archive}")
-        message(FATAL_ERROR "Missing zlib archive under ${native_lib_dir}")
-    endif()
-
-    add_library(ZLIB::ZLIB STATIC IMPORTED GLOBAL)
-    set_target_properties(ZLIB::ZLIB PROPERTIES
-        IMPORTED_LOCATION "${zlib_archive}"
-        INTERFACE_INCLUDE_DIRECTORIES "${native_include_dir}"
-    )
 else()
     find_package(FFMPEG REQUIRED)
     find_package(ZLIB REQUIRED)
@@ -99,7 +105,11 @@ target_sources(LagrangeCodec PRIVATE ${SILK_SRC_FILES})
 
 target_include_directories(LagrangeCodec PUBLIC ${FFMPEG_INCLUDE_DIRS})
 target_link_directories(LagrangeCodec PUBLIC ${FFMPEG_LIBRARY_DIRS})
-target_link_libraries(LagrangeCodec PUBLIC ${FFMPEG_LIBRARIES} ZLIB::ZLIB)
+if (LAGRANGECODEC_LINK_ZLIB)
+    target_link_libraries(LagrangeCodec PUBLIC ${FFMPEG_LIBRARIES} ZLIB::ZLIB)
+else()
+    target_link_libraries(LagrangeCodec PUBLIC ${FFMPEG_LIBRARIES})
+endif()
 
 if (LAGRANGECODEC_BUILD_ANDROID_RUNTIME_SMOKE)
     add_executable(android_runtime_smoke tests/android_runtime_smoke.cpp)

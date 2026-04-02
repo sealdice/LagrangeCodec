@@ -10,14 +10,18 @@ mkdir -p "${OUT_DIR}/lib" "${OUT_DIR}/include/public" "${OUT_DIR}/bin"
 
 cp -f "${BUILD_DIR}/libLagrangeCodec.a" "${OUT_DIR}/lib/"
 
-for name in libavcodec.a libavformat.a libavutil.a libswresample.a libswscale.a; do
-  cp -f "${PREFIX_DIR}/lib/${name}" "${OUT_DIR}/lib/${name}"
-done
+if [ -f "${PREFIX_DIR}/lib/libffmpeg.a" ]; then
+  cp -f "${PREFIX_DIR}/lib/libffmpeg.a" "${OUT_DIR}/lib/libffmpeg.a"
+else
+  for name in libavcodec.a libavformat.a libavutil.a libswresample.a libswscale.a; do
+    cp -f "${PREFIX_DIR}/lib/${name}" "${OUT_DIR}/lib/${name}"
+  done
 
-if [ -f "${PREFIX_DIR}/lib/libz.a" ]; then
-  cp -f "${PREFIX_DIR}/lib/libz.a" "${OUT_DIR}/lib/libz.a"
-elif [ -f "${PREFIX_DIR}/lib/libzlib.a" ]; then
-  cp -f "${PREFIX_DIR}/lib/libzlib.a" "${OUT_DIR}/lib/libz.a"
+  if [ -f "${PREFIX_DIR}/lib/libz.a" ]; then
+    cp -f "${PREFIX_DIR}/lib/libz.a" "${OUT_DIR}/lib/libz.a"
+  elif [ -f "${PREFIX_DIR}/lib/libzlib.a" ]; then
+    cp -f "${PREFIX_DIR}/lib/libzlib.a" "${OUT_DIR}/lib/libz.a"
+  fi
 fi
 
 if [ -f "${BUILD_DIR}/android_runtime_smoke" ]; then
@@ -31,12 +35,7 @@ Zig-based Android arm64 experimental bundle.
 
 Contents:
 - lib/libLagrangeCodec.a
-- lib/libavcodec.a
-- lib/libavformat.a
-- lib/libavutil.a
-- lib/libswresample.a
-- lib/libswscale.a
-- lib/libz.a
+- lib/libffmpeg.a or the split FFmpeg archives
 - bin/android_runtime_smoke (if built)
 EOF
 
