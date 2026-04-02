@@ -17,6 +17,22 @@ PREFIX_DIR="${OUT_ROOT}/prefix"
 
 mkdir -p "${WORK_ROOT}" "${BIN_DIR}" "${PREFIX_DIR}"
 
+download_with_fallbacks() {
+  local output_path="$1"
+  shift
+
+  local url
+  for url in "$@"; do
+    echo "Trying download: ${url}"
+    if curl -L --fail --retry 3 "${url}" -o "${output_path}"; then
+      return 0
+    fi
+  done
+
+  echo "Failed to download ${output_path} from all candidate URLs" >&2
+  return 1
+}
+
 cat > "${BIN_DIR}/zig-cc" <<EOF
 #!/usr/bin/env bash
 exec "${ZIG_BIN}" cc -target ${TARGET} "\$@"
@@ -44,7 +60,12 @@ ZLIB_SRC_DIR="${WORK_ROOT}/zlib-src"
 ZLIB_BUILD_DIR="${WORK_ROOT}/zlib-build"
 
 if [[ ! -f "${ZLIB_ARCHIVE}" ]]; then
-  curl -L --fail --retry 3 "https://zlib.net/zlib-${ZLIB_VERSION}.tar.gz" -o "${ZLIB_ARCHIVE}"
+  download_with_fallbacks \
+    "${ZLIB_ARCHIVE}" \
+    "https://zlib.net/zlib-${ZLIB_VERSION}.tar.gz" \
+    "https://www.zlib.net/fossils/zlib-${ZLIB_VERSION}.tar.gz" \
+    "https://github.com/madler/zlib/releases/download/v${ZLIB_VERSION}/zlib-${ZLIB_VERSION}.tar.gz" \
+    "https://codeload.github.com/madler/zlib/tar.gz/refs/tags/v${ZLIB_VERSION}"
 fi
 
 rm -rf "${ZLIB_SRC_DIR}" "${ZLIB_BUILD_DIR}"
@@ -66,7 +87,11 @@ FFMPEG_SRC_DIR="${WORK_ROOT}/ffmpeg-src"
 FFMPEG_BUILD_DIR="${WORK_ROOT}/ffmpeg-build"
 
 if [[ ! -f "${FFMPEG_ARCHIVE}" ]]; then
-  curl -L --fail --retry 3 "https://github.com/FFmpeg/FFmpeg/archive/refs/tags/n${FFMPEG_VERSION}.tar.gz" -o "${FFMPEG_ARCHIVE}"
+  download_with_fallbacks \
+    "${FFMPEG_ARCHIVE}" \
+    "https://github.com/FFmpeg/FFmpeg/archive/refs/tags/n${FFMPEG_VERSION}.tar.gz" \
+    "https://codeload.github.com/FFmpeg/FFmpeg/tar.gz/refs/tags/n${FFMPEG_VERSION}" \
+    "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.gz"
 fi
 
 rm -rf "${FFMPEG_SRC_DIR}" "${FFMPEG_BUILD_DIR}"
