@@ -19,7 +19,7 @@ jobs:
       - name: Setup Zig
         run: |
           set -euo pipefail
-          ZIG_URL="$(python3 -c "import json, urllib.request; print(json.load(urllib.request.urlopen('https://ziglang.org/download/index.json'))['master']['x86_64-linux']['tarball'])")"
+          ZIG_URL="https://ziglang.org/download/0.14.0/zig-linux-x86_64-0.14.0.tar.xz"
           ZIG_DIR="$RUNNER_TEMP/zig"
           rm -rf "$ZIG_DIR"
           mkdir -p "$ZIG_DIR"
@@ -38,7 +38,6 @@ jobs:
           PREFIX_DIR="$GITHUB_WORKSPACE/build-zig-android-deps/prefix"
           rm -rf "$FFMPEG_ZIG_DIR" "$PREFIX_DIR"
           git clone --depth 1 --branch 7.0.1-5 https://github.com/allyourcodebase/ffmpeg.git "$FFMPEG_ZIG_DIR"
-          sed -i 's/\.name = "libffmpeg"/.name = .libffmpeg/' "$FFMPEG_ZIG_DIR/build.zig.zon"
           cd "$FFMPEG_ZIG_DIR"
           "$ZIG_BIN" version
           "$ZIG_BIN" build -Dtarget=aarch64-linux-android -Doptimize=ReleaseFast -p "$PREFIX_DIR" 2>&1 | tee "$GITHUB_WORKSPACE/build-zig-android-deps.log"
