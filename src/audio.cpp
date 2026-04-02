@@ -337,7 +337,38 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
         goto cleanup;
     }
 
-    while ((ret = av_read_frame(format_context, packet)) == 0) {
+#if defined(__ANDROID__)
+    if (format_context && format_context->pb) {
+        LC_TRACE_POINT("PROBE audio_to_pcm before avio_seek reset");
+        ret = static_cast<int>(avio_seek(format_context->pb, 0, SEEK_SET));
+        {
+            char probe_buffer[128];
+            int probe_len = std::snprintf(probe_buffer, sizeof(probe_buffer), "PROBE audio_to_pcm after avio_seek reset ret=%d\n", ret);
+            if (probe_len > 0) {
+                lc_trace_buffer(probe_buffer, static_cast<size_t>(probe_len));
+            }
+        }
+        if (ret >= 0) {
+            avformat_flush(format_context);
+            LC_TRACE_POINT("PROBE audio_to_pcm after avformat_flush");
+        }
+    }
+#endif
+
+    while (true) {
+        LC_TRACE_POINT("PROBE audio_to_pcm before av_read_frame");
+        ret = av_read_frame(format_context, packet);
+        {
+            char probe_buffer[128];
+            int probe_len = std::snprintf(probe_buffer, sizeof(probe_buffer), "PROBE audio_to_pcm after av_read_frame ret=%d\n", ret);
+            if (probe_len > 0) {
+                lc_trace_buffer(probe_buffer, static_cast<size_t>(probe_len));
+            }
+        }
+        if (ret != 0) {
+            break;
+        }
+
         LC_LOGI("audio_to_pcm av_read_frame stream=%d size=%d", packet->stream_index, packet->size);
         if (packet->stream_index != stream_index) {
             av_packet_unref(packet);
