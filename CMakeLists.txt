@@ -33,9 +33,8 @@ endif()
 include(FetchContent)
 FetchContent_Declare(
         silk_fetch
-        GIT_REPOSITORY "https://github.com/kn007/silk-v3-decoder.git"
-        GIT_SHALLOW TRUE
-        GIT_PROGRESS TRUE
+        URL "https://codeload.github.com/kn007/silk-v3-decoder/tar.gz/refs/heads/master"
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 FetchContent_MakeAvailable(silk_fetch)
 message(STATUS "SILK source code will be downloaded to: ${silk_fetch_SOURCE_DIR}")
