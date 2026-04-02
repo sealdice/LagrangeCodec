@@ -31,11 +31,84 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
     int stream_index = -1;
     bool produced_pcm = false;
 
-    auto emit_converted_frame = [&](AVFrame* decoded_frame) -> int {
-        const int out_samples = static_cast<int>(av_rescale_rnd(
-            swr_get_delay(swr_context, decoder_ctx->sample_rate) + decoded_frame->nb_samples,
+    auto ensure_swr_context = [&](AVFrame* decoded_frame) -> int {
+        if (swr_context) {
+            return LAGRANGECODEC_OK;
+        }
+
+        if (!decoded_frame) {
+            LC_LOGE("audio_to_pcm ensure_swr_context missing decoded_frame");
+            return LAGRANGECODEC_ERROR_INVALID_ARGUMENT;
+        }
+
+        const int input_sample_rate = decoded_frame->sample_rate > 0 ? decoded_frame->sample_rate : decoder_ctx->sample_rate;
+        const int input_channels = decoded_frame->channels > 0 ? decoded_frame->channels : decoder_ctx->channels;
+        const int64_t input_channel_layout =
+            decoded_frame->channel_layout != 0 ? decoded_frame->channel_layout :
+            (decoder_ctx->channel_layout != 0 ? decoder_ctx->channel_layout : av_get_default_channel_layout(input_channels));
+        const auto input_sample_fmt = static_cast<AVSampleFormat>(decoded_frame->format);
+
+        LC_LOGI(
+            "audio_to_pcm ensure_swr_context frame sample_rate=%d channels=%d channel_layout=%lld sample_fmt=%d decoder_sample_rate=%d decoder_channels=%d decoder_layout=%lld",
+            input_sample_rate,
+            input_channels,
+            static_cast<long long>(input_channel_layout),
+            static_cast<int>(input_sample_fmt),
+            decoder_ctx ? decoder_ctx->sample_rate : -1,
+            decoder_ctx ? decoder_ctx->channels : -1,
+            static_cast<long long>(decoder_ctx ? decoder_ctx->channel_layout : 0)
+        );
+
+        if (input_sample_rate <= 0 || input_channels <= 0 || input_channel_layout == 0 || input_sample_fmt == AV_SAMPLE_FMT_NONE) {
+            LC_LOGE(
+                "audio_to_pcm ensure_swr_context invalid input format sample_rate=%d channels=%d channel_layout=%lld sample_fmt=%d",
+                input_sample_rate,
+                input_channels,
+                static_cast<long long>(input_channel_layout),
+                static_cast<int>(input_sample_fmt)
+            );
+            return LAGRANGECODEC_ERROR_CODEC_OPEN_FAILED;
+        }
+
+        swr_context = swr_alloc_set_opts(
+            nullptr,
+            AV_CH_LAYOUT_MONO,
+            AV_SAMPLE_FMT_S16,
             SILKV3_SAMPLE_RATE,
-            decoder_ctx->sample_rate,
+            input_channel_layout,
+            input_sample_fmt,
+            input_sample_rate,
+            0,
+            nullptr
+        );
+
+        if (!swr_context) {
+            LC_LOGE("audio_to_pcm ensure_swr_context swr_alloc_set_opts returned null");
+            return LAGRANGECODEC_ERROR_ALLOCATION_FAILED;
+        }
+
+        const int init_ret = swr_init(swr_context);
+        if (init_ret < 0) {
+            char errbuf[AV_ERROR_MAX_STRING_SIZE] = {};
+            av_strerror(init_ret, errbuf, sizeof(errbuf));
+            LC_LOGE("audio_to_pcm ensure_swr_context swr_init failed ret=%d err=%s", init_ret, errbuf);
+            return LAGRANGECODEC_ERROR_CONVERSION_FAILED;
+        }
+
+        LC_LOGI("audio_to_pcm ensure_swr_context swr_init ok");
+        return LAGRANGECODEC_OK;
+    };
+
+    auto emit_converted_frame = [&](AVFrame* decoded_frame) -> int {
+        int ensure_ret = ensure_swr_context(decoded_frame);
+        if (ensure_ret != LAGRANGECODEC_OK) {
+            return ensure_ret;
+        }
+
+        const int out_samples = static_cast<int>(av_rescale_rnd(
+            swr_get_delay(swr_context, decoded_frame->sample_rate > 0 ? decoded_frame->sample_rate : decoder_ctx->sample_rate) + decoded_frame->nb_samples,
+            SILKV3_SAMPLE_RATE,
+            decoded_frame->sample_rate > 0 ? decoded_frame->sample_rate : decoder_ctx->sample_rate,
             AV_ROUND_UP
         ));
 
@@ -189,20 +262,46 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
 
     ret = avcodec_parameters_to_context(decoder_ctx, stream->codecpar);
     if (ret < 0) {
+        char errbuf[AV_ERROR_MAX_STRING_SIZE] = {};
+        av_strerror(ret, errbuf, sizeof(errbuf));
+        LC_LOGE("audio_to_pcm avcodec_parameters_to_context failed ret=%d err=%s", ret, errbuf);
         result = LAGRANGECODEC_ERROR_CODEC_OPEN_FAILED;
         goto cleanup;
     }
 
+#if defined(__ANDROID__)
+    decoder_ctx->thread_count = 1;
+    decoder_ctx->thread_type = 0;
+    LC_LOGI("audio_to_pcm forcing single-thread decoder on Android");
+#endif
+
+    decoder_ctx->pkt_timebase = stream->time_base;
+    LC_LOGI(
+        "audio_to_pcm decoder_ctx before open sample_rate=%d channels=%d channel_layout=%lld sample_fmt=%d pkt_timebase=%d/%d",
+        decoder_ctx->sample_rate,
+        decoder_ctx->channels,
+        static_cast<long long>(decoder_ctx->channel_layout),
+        decoder_ctx->sample_fmt,
+        decoder_ctx->pkt_timebase.num,
+        decoder_ctx->pkt_timebase.den
+    );
+
     ret = avcodec_open2(decoder_ctx, decoder, nullptr);
     if (ret < 0) {
-        LC_LOGE("ERROR: failed to open the decoder ret=%d", ret);
+        char errbuf[AV_ERROR_MAX_STRING_SIZE] = {};
+        av_strerror(ret, errbuf, sizeof(errbuf));
+        LC_LOGE("ERROR: failed to open the decoder ret=%d err=%s", ret, errbuf);
         result = LAGRANGECODEC_ERROR_CODEC_OPEN_FAILED;
         goto cleanup;
     }
-    if (decoder_ctx->sample_rate <= 0 || decoder_ctx->channels <= 0) {
-        result = LAGRANGECODEC_ERROR_CODEC_OPEN_FAILED;
-        goto cleanup;
-    }
+    LC_LOGI(
+        "audio_to_pcm decoder_ctx after open sample_rate=%d channels=%d channel_layout=%lld sample_fmt=%d frame_size=%d",
+        decoder_ctx->sample_rate,
+        decoder_ctx->channels,
+        static_cast<long long>(decoder_ctx->channel_layout),
+        decoder_ctx->sample_fmt,
+        decoder_ctx->frame_size
+    );
 
     if (decoder_ctx->channel_layout == 0) {
         decoder_ctx->channel_layout = av_get_default_channel_layout(decoder_ctx->channels);
@@ -220,32 +319,6 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
         result = LAGRANGECODEC_ERROR_ALLOCATION_FAILED;
         goto cleanup;
     }
-
-    swr_context = swr_alloc_set_opts(
-        nullptr,
-        AV_CH_LAYOUT_MONO,
-        AV_SAMPLE_FMT_S16,
-        SILKV3_SAMPLE_RATE,
-        av_get_default_channel_layout(decoder_ctx->channels),
-        decoder_ctx->sample_fmt,
-        decoder_ctx->sample_rate,
-        0,
-        nullptr
-    );
-
-    if (!swr_context) {
-        LC_LOGE("audio_to_pcm swr_alloc_set_opts returned null");
-        result = LAGRANGECODEC_ERROR_ALLOCATION_FAILED;
-        goto cleanup;
-    }
-
-    ret = swr_init(swr_context);
-    if (ret < 0) {
-        LC_LOGE("audio_to_pcm swr_init failed ret=%d", ret);
-        result = LAGRANGECODEC_ERROR_CONVERSION_FAILED;
-        goto cleanup;
-    }
-    LC_LOGI("audio_to_pcm swr_init ok");
 
     while ((ret = av_read_frame(format_context, packet)) == 0) {
         LC_LOGI("audio_to_pcm av_read_frame stream=%d size=%d", packet->stream_index, packet->size);
