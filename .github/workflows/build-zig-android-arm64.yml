@@ -38,6 +38,7 @@ jobs:
           PREFIX_DIR="$GITHUB_WORKSPACE/build-zig-android-deps/prefix"
           rm -rf "$FFMPEG_ZIG_DIR" "$PREFIX_DIR"
           git clone --depth 1 --branch 7.0.1-5 https://github.com/allyourcodebase/ffmpeg.git "$FFMPEG_ZIG_DIR"
+          sed -i 's/\.name = "libffmpeg"/.name = .libffmpeg/' "$FFMPEG_ZIG_DIR/build.zig.zon"
           cd "$FFMPEG_ZIG_DIR"
           "$ZIG_BIN" version
           "$ZIG_BIN" build -Dtarget=aarch64-linux-android -Doptimize=ReleaseFast -p "$PREFIX_DIR" 2>&1 | tee "$GITHUB_WORKSPACE/build-zig-android-deps.log"
