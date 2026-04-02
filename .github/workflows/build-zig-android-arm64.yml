@@ -55,7 +55,7 @@ jobs:
           sed -i 's|t\.cpu\.arch\.isX86()|switch (t.cpu.arch) { .x86, .x86_64 => true, else => false }|g' "$FFMPEG_ZIG_DIR/build.zig"
           cd "$FFMPEG_ZIG_DIR"
           "$ZIG_BIN" version
-          "$ZIG_BIN" build -Dtarget=aarch64-linux-android21 -Doptimize=ReleaseFast -p "$PREFIX_DIR" 2>&1 | tee "$GITHUB_WORKSPACE/build-zig-android-deps.log"
+          "$ZIG_BIN" build -Dtarget=aarch64-linux-android -Doptimize=ReleaseFast -p "$PREFIX_DIR" 2>&1 | tee "$GITHUB_WORKSPACE/build-zig-android-deps.log"
 
       - name: Summarize Zig deps log
         if: always()
