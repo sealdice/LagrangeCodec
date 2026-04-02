@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - '*'
+      - '!zig-android-arm64-clean'
 
 jobs:
   build-windows-x64:

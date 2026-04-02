@@ -26,6 +26,7 @@ jobs:
           curl -L --fail "$ZIG_URL" -o "$RUNNER_TEMP/zig.tar.xz"
           tar -xJf "$RUNNER_TEMP/zig.tar.xz" -C "$ZIG_DIR" --strip-components=1
           echo "$ZIG_DIR" >> "$GITHUB_PATH"
+          echo "ZIG_BIN=$ZIG_DIR/zig" >> "$GITHUB_ENV"
           "$ZIG_DIR/zig" version
 
       - name: Build Zig Android deps
@@ -38,7 +39,8 @@ jobs:
           rm -rf "$FFMPEG_ZIG_DIR" "$PREFIX_DIR"
           git clone --depth 1 --branch 7.0.1-5 https://github.com/allyourcodebase/ffmpeg.git "$FFMPEG_ZIG_DIR"
           cd "$FFMPEG_ZIG_DIR"
-          zig build -Dtarget=aarch64-linux-android -Doptimize=ReleaseFast -p "$PREFIX_DIR" 2>&1 | tee "$GITHUB_WORKSPACE/build-zig-android-deps.log"
+          "$ZIG_BIN" version
+          "$ZIG_BIN" build -Dtarget=aarch64-linux-android -Doptimize=ReleaseFast -p "$PREFIX_DIR" 2>&1 | tee "$GITHUB_WORKSPACE/build-zig-android-deps.log"
 
       - name: Summarize Zig deps log
         if: always()

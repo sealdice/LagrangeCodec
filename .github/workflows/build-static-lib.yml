@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - '*'
+      - '!zig-android-arm64-clean'
 
 jobs:
   build-windows-mingw-x64:
@@ -345,4 +346,3 @@ jobs:
         with:
           name: LagrangeCodec.staticlink.macos.arm64
           path: bundle/
-
