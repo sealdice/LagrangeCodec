@@ -1,0 +1,158 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+OUT_ROOT_INPUT="${1:?output root is required}"
+API="${ANDROID_PLATFORM:-21}"
+TARGET="aarch64-linux-android${API}"
+ZIG_BIN="${ZIG:-zig}"
+ZLIB_VERSION="${ZLIB_VERSION:-1.3.1}"
+FFMPEG_VERSION="${FFMPEG_VERSION:-5.0}"
+
+mkdir -p "${OUT_ROOT_INPUT}"
+OUT_ROOT="$(cd "${OUT_ROOT_INPUT}" && pwd)"
+WORK_ROOT="${OUT_ROOT}/_work"
+BIN_DIR="${WORK_ROOT}/bin"
+PREFIX_DIR="${OUT_ROOT}/prefix"
+
+mkdir -p "${WORK_ROOT}" "${BIN_DIR}" "${PREFIX_DIR}"
+
+cat > "${BIN_DIR}/zig-cc" <<EOF
+#!/usr/bin/env bash
+exec "${ZIG_BIN}" cc -target ${TARGET} "\$@"
+EOF
+
+cat > "${BIN_DIR}/zig-cxx" <<EOF
+#!/usr/bin/env bash
+exec "${ZIG_BIN}" c++ -target ${TARGET} "\$@"
+EOF
+
+cat > "${BIN_DIR}/zig-ar" <<EOF
+#!/usr/bin/env bash
+exec "${ZIG_BIN}" ar "\$@"
+EOF
+
+cat > "${BIN_DIR}/zig-ranlib" <<EOF
+#!/usr/bin/env bash
+exec "${ZIG_BIN}" ranlib "\$@"
+EOF
+
+chmod +x "${BIN_DIR}/zig-cc" "${BIN_DIR}/zig-cxx" "${BIN_DIR}/zig-ar" "${BIN_DIR}/zig-ranlib"
+
+ZLIB_ARCHIVE="${WORK_ROOT}/zlib-${ZLIB_VERSION}.tar.gz"
+ZLIB_SRC_DIR="${WORK_ROOT}/zlib-src"
+ZLIB_BUILD_DIR="${WORK_ROOT}/zlib-build"
+
+if [[ ! -f "${ZLIB_ARCHIVE}" ]]; then
+  curl -L --fail --retry 3 "https://zlib.net/zlib-${ZLIB_VERSION}.tar.gz" -o "${ZLIB_ARCHIVE}"
+fi
+
+rm -rf "${ZLIB_SRC_DIR}" "${ZLIB_BUILD_DIR}"
+mkdir -p "${ZLIB_SRC_DIR}" "${ZLIB_BUILD_DIR}"
+tar -xzf "${ZLIB_ARCHIVE}" -C "${ZLIB_SRC_DIR}" --strip-components=1
+
+pushd "${ZLIB_SRC_DIR}" >/dev/null
+CHOST="aarch64-linux-android" \
+CC="${BIN_DIR}/zig-cc" \
+AR="${BIN_DIR}/zig-ar" \
+RANLIB="${BIN_DIR}/zig-ranlib" \
+./configure --static --prefix="${PREFIX_DIR}"
+make -j"$(nproc 2>/dev/null || echo 4)"
+make install
+popd >/dev/null
+
+FFMPEG_ARCHIVE="${WORK_ROOT}/ffmpeg-n${FFMPEG_VERSION}.tar.gz"
+FFMPEG_SRC_DIR="${WORK_ROOT}/ffmpeg-src"
+FFMPEG_BUILD_DIR="${WORK_ROOT}/ffmpeg-build"
+
+if [[ ! -f "${FFMPEG_ARCHIVE}" ]]; then
+  curl -L --fail --retry 3 "https://github.com/FFmpeg/FFmpeg/archive/refs/tags/n${FFMPEG_VERSION}.tar.gz" -o "${FFMPEG_ARCHIVE}"
+fi
+
+rm -rf "${FFMPEG_SRC_DIR}" "${FFMPEG_BUILD_DIR}"
+mkdir -p "${FFMPEG_SRC_DIR}" "${FFMPEG_BUILD_DIR}"
+tar -xzf "${FFMPEG_ARCHIVE}" -C "${FFMPEG_SRC_DIR}" --strip-components=1
+
+NM_BIN="$(command -v llvm-nm || command -v nm)"
+STRIP_BIN="$(command -v llvm-strip || command -v strip)"
+
+pushd "${FFMPEG_BUILD_DIR}" >/dev/null
+"${FFMPEG_SRC_DIR}/configure" \
+  --prefix="${PREFIX_DIR}" \
+  --target-os=android \
+  --arch=aarch64 \
+  --cc="${BIN_DIR}/zig-cc" \
+  --cxx="${BIN_DIR}/zig-cxx" \
+  --ar="${BIN_DIR}/zig-ar" \
+  --nm="${NM_BIN}" \
+  --ranlib="${BIN_DIR}/zig-ranlib" \
+  --strip="${STRIP_BIN}" \
+  --enable-cross-compile \
+  --enable-pic \
+  --disable-asm \
+  --disable-x86asm \
+  --disable-shared \
+  --enable-static \
+  --disable-programs \
+  --disable-doc \
+  --disable-debug \
+  --disable-autodetect \
+  --disable-network \
+  --disable-postproc \
+  --disable-avdevice \
+  --disable-iconv \
+  --disable-bzlib \
+  --disable-lzma \
+  --disable-sdl2 \
+  --disable-everything \
+  --disable-logging \
+  --enable-avcodec \
+  --enable-avformat \
+  --enable-avutil \
+  --enable-swresample \
+  --enable-swscale \
+  --enable-zlib \
+  --enable-protocol=file \
+  --enable-encoder=png \
+  --enable-decoder=mp3 \
+  --enable-decoder=mp3float \
+  --enable-decoder=aac \
+  --enable-decoder=flac \
+  --enable-decoder=vorbis \
+  --enable-decoder=pcm_s16le \
+  --enable-decoder=h264 \
+  --enable-decoder=hevc \
+  --enable-decoder=vp8 \
+  --enable-decoder=vp9 \
+  --enable-decoder=mjpeg \
+  --enable-demuxer=aac \
+  --enable-demuxer=aiff \
+  --enable-demuxer=flac \
+  --enable-demuxer=mp3 \
+  --enable-demuxer=ogg \
+  --enable-demuxer=pcm_alaw \
+  --enable-demuxer=wav \
+  --enable-demuxer=flv \
+  --enable-demuxer=h264 \
+  --enable-demuxer=hevc \
+  --enable-demuxer=matroska \
+  --enable-demuxer=mov \
+  --enable-demuxer=avi \
+  --enable-parser=aac \
+  --enable-parser=mpegaudio \
+  --enable-parser=h264 \
+  --enable-parser=hevc \
+  --enable-parser=vorbis \
+  --enable-bsf=h264_mp4toannexb \
+  --enable-bsf=hevc_mp4toannexb \
+  --enable-fft \
+  --extra-cflags="-I${PREFIX_DIR}/include -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0" \
+  --extra-ldflags="-L${PREFIX_DIR}/lib" \
+  --extra-libs="-lm"
+
+make -j"$(nproc 2>/dev/null || echo 4)"
+make install
+popd >/dev/null
+
+echo "Built Zig Android deps under ${PREFIX_DIR}"
+find "${PREFIX_DIR}" -maxdepth 2 -type f | sort

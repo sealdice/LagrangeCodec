@@ -15,13 +15,11 @@ extern "C" {
 int save_frame_as_png(AVFrame* frame, int width, int height, uint8_t*& out, int& out_len) {
     auto png_codec = avcodec_find_encoder(AV_CODEC_ID_PNG);
     if (!png_codec) {
-        fprintf(stderr, "ERROR: AV_CODEC_ID_PNG codec not found\n");
         return -1;
     }
 
     AVCodecContext* codec_context = avcodec_alloc_context3(png_codec);
     if (!codec_context) {
-        fprintf(stderr, "ERROR: Failed to allocate codec context for AV_CODEC_ID_PNG\n");
         return -1;
     }
 
@@ -32,7 +30,6 @@ int save_frame_as_png(AVFrame* frame, int width, int height, uint8_t*& out, int&
     codec_context->time_base = AVRational{1, 25}; // Assume 25 fps for example
 
     if (avcodec_open2(codec_context, png_codec, nullptr) < 0) {
-        fprintf(stderr, "ERROR: Failed to open codec\n");
         avcodec_free_context(&codec_context);
         return -1;
     }
@@ -42,14 +39,12 @@ int save_frame_as_png(AVFrame* frame, int width, int height, uint8_t*& out, int&
 
     int ret = avcodec_send_frame(codec_context, frame);
     if (ret < 0) {
-        fprintf(stderr, "ERROR: Failed to send frame to encoder\n");
         avcodec_free_context(&codec_context);
         return -1;
     }
 
     ret = avcodec_receive_packet(codec_context, &pkt); // Receive the encoded PNG packet
     if (ret < 0) {
-        fprintf(stderr, "ERROR: Failed to receive packet\n");
         avcodec_free_context(&codec_context);
         return -1;
     }
@@ -69,18 +64,15 @@ int video_first_frame(uint8_t* video_data, int data_len, uint8_t*& out, int& out
 
     int ret_code = create_format_context(video_data, data_len, &format_context);
     if (ret_code < 0) {
-        fprintf(stderr, "ERROR: failed to create format context\n");
         return -1;
     }
 
     ret_code = avformat_open_input(&format_context, nullptr, nullptr, nullptr);
     if (ret_code < 0) {
-        fprintf(stderr, "ERROR: failed to open the media stream\n");
         return -1;
     }
 
     if (avformat_find_stream_info(format_context, nullptr) < 0) {
-        fprintf(stderr, "ERROR: failed to find stream info\n");
         return -1;
     }
 
@@ -95,7 +87,6 @@ int video_first_frame(uint8_t* video_data, int data_len, uint8_t*& out, int& out
     }
 
     if (video_stream_index == -1) {
-        fprintf(stderr, "ERROR: no video stream found\n");
         return -1;
     }
 
@@ -103,7 +94,6 @@ int video_first_frame(uint8_t* video_data, int data_len, uint8_t*& out, int& out
     avcodec_parameters_to_context(codec_context, format_context->streams[video_stream_index]->codecpar);
 
     if (avcodec_open2(codec_context, codec, nullptr) < 0) {
-        fprintf(stderr, "ERROR: failed to open the codec\n");
         return -1;
     }
 
@@ -114,7 +104,6 @@ int video_first_frame(uint8_t* video_data, int data_len, uint8_t*& out, int& out
         if (packet.stream_index == video_stream_index) {
             int response = avcodec_send_packet(codec_context, &packet);
             if (response < 0) {
-                fprintf(stderr, "ERROR: failed to send packet\n");
                 return -1;
             }
 

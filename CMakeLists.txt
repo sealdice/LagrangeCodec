@@ -7,6 +7,8 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # Default builds keep producing the shared library as before. Static builds are
 # used by the dedicated CI workflow (and by consumers who want a .a archive).
 option(LAGRANGECODEC_BUILD_SHARED "Build LagrangeCodec as a shared library" ON)
+option(LAGRANGECODEC_BUILD_ANDROID_RUNTIME_SMOKE "Build the minimal Android runtime smoke executable" OFF)
+set(LAGRANGECODEC_NATIVE_PREFIX "" CACHE PATH "Prefix containing prebuilt FFmpeg/zlib static libraries")
 if (LINUX)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wl,-Bsymbolic")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wl,-Bsymbolic")
@@ -28,9 +30,43 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(silk_fetch)
 message(STATUS "SILK source code will be downloaded to: ${silk_fetch_SOURCE_DIR}")
 
-find_package(FFMPEG REQUIRED)
+if (LAGRANGECODEC_NATIVE_PREFIX)
+    set(native_include_dir "${LAGRANGECODEC_NATIVE_PREFIX}/include")
+    set(native_lib_dir "${LAGRANGECODEC_NATIVE_PREFIX}/lib")
 
-find_package(ZLIB REQUIRED)
+    set(FFMPEG_INCLUDE_DIRS "${native_include_dir}")
+    set(FFMPEG_LIBRARY_DIRS "${native_lib_dir}")
+    set(FFMPEG_LIBRARIES
+        "${native_lib_dir}/libavformat.a"
+        "${native_lib_dir}/libavcodec.a"
+        "${native_lib_dir}/libswresample.a"
+        "${native_lib_dir}/libswscale.a"
+        "${native_lib_dir}/libavutil.a"
+    )
+
+    foreach(required_file IN LISTS FFMPEG_LIBRARIES)
+        if (NOT EXISTS "${required_file}")
+            message(FATAL_ERROR "Missing FFmpeg archive: ${required_file}")
+        endif()
+    endforeach()
+
+    set(zlib_archive "${native_lib_dir}/libz.a")
+    if (NOT EXISTS "${zlib_archive}" AND EXISTS "${native_lib_dir}/libzlib.a")
+        set(zlib_archive "${native_lib_dir}/libzlib.a")
+    endif()
+    if (NOT EXISTS "${zlib_archive}")
+        message(FATAL_ERROR "Missing zlib archive under ${native_lib_dir}")
+    endif()
+
+    add_library(ZLIB::ZLIB STATIC IMPORTED GLOBAL)
+    set_target_properties(ZLIB::ZLIB PROPERTIES
+        IMPORTED_LOCATION "${zlib_archive}"
+        INTERFACE_INCLUDE_DIRECTORIES "${native_include_dir}"
+    )
+else()
+    find_package(FFMPEG REQUIRED)
+    find_package(ZLIB REQUIRED)
+endif()
 
 file(GLOB SOURCES CONFIGURE_DEPENDS "src/*.cpp")
 if (LAGRANGECODEC_BUILD_SHARED)
@@ -65,6 +101,17 @@ target_include_directories(LagrangeCodec PUBLIC ${FFMPEG_INCLUDE_DIRS})
 target_link_directories(LagrangeCodec PUBLIC ${FFMPEG_LIBRARY_DIRS})
 target_link_libraries(LagrangeCodec PUBLIC ${FFMPEG_LIBRARIES} ZLIB::ZLIB)
 
-enable_testing()
-find_package(GTest CONFIG REQUIRED)
-add_subdirectory(tests)
+if (LAGRANGECODEC_BUILD_ANDROID_RUNTIME_SMOKE)
+    add_executable(android_runtime_smoke tests/android_runtime_smoke.cpp)
+    target_include_directories(android_runtime_smoke PRIVATE ${PROJECT_SOURCE_DIR}/include/public)
+    target_link_libraries(android_runtime_smoke PRIVATE LagrangeCodec)
+    set_target_properties(android_runtime_smoke PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    )
+endif()
+
+include(CTest)
+if (BUILD_TESTING)
+    find_package(GTest CONFIG REQUIRED)
+    add_subdirectory(tests)
+endif()

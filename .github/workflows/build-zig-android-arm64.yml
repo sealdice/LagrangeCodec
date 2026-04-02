@@ -1,0 +1,71 @@
+name: Build Zig Android arm64
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - zig-android-arm64-clean
+
+jobs:
+  build-zig-android-arm64:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Toolchains
+        run: |
+          sudo apt-get update && sudo apt install build-essential cmake ninja-build nasm curl python3 -y
+
+      - name: Setup Zig
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.13.0
+
+      - name: Build Zig Android deps
+        run: |
+          set -euo pipefail
+          chmod +x scripts/build_zig_android_deps.sh
+          bash scripts/build_zig_android_deps.sh build-zig-android-deps
+
+      - name: Prepare Zig compiler wrappers
+        run: |
+          set -euo pipefail
+          WRAPPER_DIR="$RUNNER_TEMP/zig-android-bin"
+          mkdir -p "$WRAPPER_DIR"
+          printf '%s\n' '#!/usr/bin/env bash' 'exec zig cc -target aarch64-linux-android21 "$@"' > "$WRAPPER_DIR/zig-cc"
+          printf '%s\n' '#!/usr/bin/env bash' 'exec zig c++ -target aarch64-linux-android21 "$@"' > "$WRAPPER_DIR/zig-cxx"
+          printf '%s\n' '#!/usr/bin/env bash' 'exec zig ar "$@"' > "$WRAPPER_DIR/zig-ar"
+          printf '%s\n' '#!/usr/bin/env bash' 'exec zig ranlib "$@"' > "$WRAPPER_DIR/zig-ranlib"
+          chmod +x "$WRAPPER_DIR/zig-cc" "$WRAPPER_DIR/zig-cxx" "$WRAPPER_DIR/zig-ar" "$WRAPPER_DIR/zig-ranlib"
+          echo "WRAPPER_DIR=$WRAPPER_DIR" >> "$GITHUB_ENV"
+
+      - name: Build LagrangeCodec Zig Android static bundle
+        run: |
+          set -euo pipefail
+          PREFIX_DIR="$GITHUB_WORKSPACE/build-zig-android-deps/prefix"
+          cmake -G Ninja \
+            -S . \
+            -B build-zig-android \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_SYSTEM_NAME=Linux \
+            -DCMAKE_C_COMPILER="$WRAPPER_DIR/zig-cc" \
+            -DCMAKE_CXX_COMPILER="$WRAPPER_DIR/zig-cxx" \
+            -DCMAKE_AR="$WRAPPER_DIR/zig-ar" \
+            -DCMAKE_RANLIB="$WRAPPER_DIR/zig-ranlib" \
+            -DBUILD_TESTING=OFF \
+            -DLAGRANGECODEC_BUILD_SHARED=OFF \
+            -DLAGRANGECODEC_BUILD_ANDROID_RUNTIME_SMOKE=ON \
+            -DLAGRANGECODEC_NATIVE_PREFIX="$PREFIX_DIR"
+          cmake --build build-zig-android
+
+      - name: Stage bundle
+        run: |
+          set -euo pipefail
+          chmod +x scripts/stage_zig_android_bundle.sh
+          bash scripts/stage_zig_android_bundle.sh build-zig-android build-zig-android-deps/prefix bundle/zig-androidArm64
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LagrangeCodec.zig.android.arm64
+          path: bundle/zig-androidArm64/
