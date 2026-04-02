@@ -64,7 +64,7 @@ jobs:
           bad=0
           for name in "${REQUIRED_LIBS[@]}"; do
             lib="$PREFIX_DIR/lib/$name"
-            undefined="$($NM_BIN -u "$lib" 2>/dev/null || true)"
+            undefined="$($NM_BIN -u "$lib" 2>/dev/null | awk '/ U / { print $2 }' || true)"
 
             if printf '%s\n' "$undefined" | grep -E '(__read_chk|__vsnprintf_chk|__write_chk|(^|[^[:alnum:]_])stderr([^[:alnum:]_]|$))' >/dev/null; then
               echo "Forbidden host/glibc symbol found in $name"
