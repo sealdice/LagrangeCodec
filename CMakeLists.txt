@@ -108,7 +108,7 @@ else()
     if (MINGW)
         list(APPEND SHIM_SOURCES "${CMAKE_SOURCE_DIR}/src/shim/mingw_time_shim.c")
     endif()
-    if (LINUX OR LAGRANGECODEC_TARGET_IS_ANDROID)
+    if (LINUX AND NOT LAGRANGECODEC_TARGET_IS_ANDROID)
         list(APPEND SHIM_SOURCES
             "${CMAKE_SOURCE_DIR}/src/shim/linux_aarch64_atomic_shim.c"
             "${CMAKE_SOURCE_DIR}/src/shim/linux_fcntl64_shim.c"
