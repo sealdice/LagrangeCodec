@@ -107,6 +107,7 @@ jobs:
           set -euo pipefail
           PREFIX_DIR="$GITHUB_WORKSPACE/build-zig-android-deps/prefix"
           cmake -G Ninja \
+            --log-level=VERBOSE \
             -S . \
             -B build-zig-android \
             -DCMAKE_BUILD_TYPE=Release \
@@ -120,6 +121,7 @@ jobs:
             -DCMAKE_AR="$AR_BIN" \
             -DCMAKE_RANLIB="$RANLIB_BIN" \
             -DBUILD_TESTING=OFF \
+            -DFETCHCONTENT_QUIET=OFF \
             -DLAGRANGECODEC_BUILD_SHARED=OFF \
             -DLAGRANGECODEC_BUILD_ANDROID_RUNTIME_SMOKE=ON \
             -DLAGRANGECODEC_NATIVE_PREFIX="$PREFIX_DIR" \
@@ -161,14 +163,21 @@ jobs:
       - name: Stop if Zig Android build failed
         if: steps.build_android.outcome == 'failure'
         run: |
-          for log_file in build-zig-android.log build-zig-android/CMakeFiles/CMakeError.log build-zig-android/CMakeFiles/CMakeOutput.log; do
-            if [ -f "$log_file" ]; then
-              echo "::error file=.github/workflows/build-zig-android-arm64.yml,line=1::===== ${log_file} ====="
-              sed -n '1,200p' "$log_file" | while IFS= read -r line; do
-                echo "::error file=.github/workflows/build-zig-android-arm64.yml,line=1::${line}"
-              done
+          emit_github_error() {
+            local log_file="$1"
+            if [ ! -f "$log_file" ]; then
+              return 0
             fi
-          done
+            local content
+            content="$(tail -n 120 "$log_file" || true)"
+            content="${content//'%'/'%25'}"
+            content="${content//$'"'"'\r'"'"'/'%0D'}"
+            content="${content//$'"'"'\n'"'"'/'%0A'}"
+            echo "::error file=.github/workflows/build-zig-android-arm64.yml,line=1::===== ${log_file} =====%0A${content}"
+          }
+          emit_github_error build-zig-android.log
+          emit_github_error build-zig-android/CMakeFiles/CMakeError.log
+          emit_github_error build-zig-android/CMakeFiles/CMakeOutput.log
           echo 'Build LagrangeCodec Zig Android static bundle failed'
           exit 1
 
