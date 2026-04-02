@@ -115,13 +115,12 @@ jobs:
             -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
             -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY \
             -DCMAKE_C_COMPILER="$WRAPPER_DIR/zig-cc" \
-            -DCMAKE_C_COMPILER_TARGET=aarch64-linux-android \
             -DCMAKE_CXX_COMPILER="$WRAPPER_DIR/zig-cxx" \
-            -DCMAKE_CXX_COMPILER_TARGET=aarch64-linux-android \
             -DCMAKE_AR="$AR_BIN" \
             -DCMAKE_RANLIB="$RANLIB_BIN" \
             -DBUILD_TESTING=OFF \
             -DFETCHCONTENT_QUIET=OFF \
+            -DLAGRANGECODEC_FORCE_ANDROID_TARGET=ON \
             -DLAGRANGECODEC_BUILD_SHARED=OFF \
             -DLAGRANGECODEC_BUILD_ANDROID_RUNTIME_SMOKE=ON \
             -DLAGRANGECODEC_NATIVE_PREFIX="$PREFIX_DIR" \
