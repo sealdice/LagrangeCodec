@@ -34,6 +34,52 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
     bool used_android_parser = false;
     const uint8_t* parse_data = nullptr;
     int parse_bytes_remaining = 0;
+    uint8_t* padded_audio_data = nullptr;
+
+    auto trace_parser_packet = [&](const char* stage, const AVPacket* current_packet, const uint8_t* current_parse_data, int current_remaining) {
+        char hex_buffer[3 * 32 + 1] = {};
+        int hex_len = 0;
+        if (current_packet && current_packet->data && current_packet->size > 0) {
+            const int dump_bytes = std::min(current_packet->size, 32);
+            for (int i = 0; i < dump_bytes && hex_len < static_cast<int>(sizeof(hex_buffer)) - 4; ++i) {
+                hex_len += std::snprintf(
+                    hex_buffer + hex_len,
+                    sizeof(hex_buffer) - static_cast<size_t>(hex_len),
+                    "%02X%s",
+                    current_packet->data[i],
+                    (i + 1) < dump_bytes ? " " : ""
+                );
+            }
+        }
+
+        const long long parse_offset =
+            (padded_audio_data && current_parse_data)
+                ? static_cast<long long>(current_parse_data - padded_audio_data)
+                : -1;
+
+        char probe_buffer[768];
+        int probe_len = std::snprintf(
+            probe_buffer,
+            sizeof(probe_buffer),
+            "PROBE audio_to_pcm %s packet=%p data=%p size=%d buf=%p stream_index=%d pts=%lld dts=%lld pos=%lld flags=%d parse_offset=%lld remaining=%d hex=%s\n",
+            stage ? stage : "(null)",
+            current_packet,
+            current_packet ? current_packet->data : nullptr,
+            current_packet ? current_packet->size : -1,
+            current_packet ? current_packet->buf : nullptr,
+            current_packet ? current_packet->stream_index : -1,
+            static_cast<long long>(current_packet ? current_packet->pts : AV_NOPTS_VALUE),
+            static_cast<long long>(current_packet ? current_packet->dts : AV_NOPTS_VALUE),
+            static_cast<long long>(current_packet ? current_packet->pos : -1),
+            current_packet ? current_packet->flags : 0,
+            parse_offset,
+            current_remaining,
+            hex_buffer
+        );
+        if (probe_len > 0) {
+            lc_trace_buffer(probe_buffer, static_cast<size_t>(probe_len));
+        }
+    };
 
     auto ensure_swr_context = [&](AVFrame* decoded_frame) -> int {
         if (swr_context) {
@@ -342,6 +388,22 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
     }
 
 #if defined(__ANDROID__)
+    padded_audio_data = static_cast<uint8_t*>(av_malloc(static_cast<size_t>(data_len) + AV_INPUT_BUFFER_PADDING_SIZE));
+    if (!padded_audio_data) {
+        LC_LOGE("audio_to_pcm failed to allocate padded input buffer len=%d", data_len);
+        result = LAGRANGECODEC_ERROR_ALLOCATION_FAILED;
+        goto cleanup;
+    }
+    std::memcpy(padded_audio_data, audio_data, static_cast<size_t>(data_len));
+    std::memset(padded_audio_data + data_len, 0, AV_INPUT_BUFFER_PADDING_SIZE);
+    {
+        char probe_buffer[128];
+        int probe_len = std::snprintf(probe_buffer, sizeof(probe_buffer), "PROBE audio_to_pcm padded input buffer=%p len=%d\n", padded_audio_data, data_len);
+        if (probe_len > 0) {
+            lc_trace_buffer(probe_buffer, static_cast<size_t>(probe_len));
+        }
+    }
+
     parser = av_parser_init(stream->codecpar->codec_id);
     {
         char probe_buffer[128];
@@ -357,11 +419,17 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
     }
     used_android_parser = true;
 
-    parse_data = audio_data;
+    parse_data = padded_audio_data;
     parse_bytes_remaining = data_len;
     while (parse_bytes_remaining > 0) {
+        av_packet_unref(packet);
         packet->data = nullptr;
         packet->size = 0;
+        packet->pts = AV_NOPTS_VALUE;
+        packet->dts = AV_NOPTS_VALUE;
+        packet->pos = -1;
+        packet->stream_index = stream_index;
+        packet->flags = 0;
 
         LC_TRACE_POINT("PROBE audio_to_pcm before parser_parse2");
         ret = av_parser_parse2(
@@ -382,6 +450,7 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
                 lc_trace_buffer(probe_buffer, static_cast<size_t>(probe_len));
             }
         }
+        trace_parser_packet("after-parser-parse2", packet, parse_data, parse_bytes_remaining);
 
         if (ret < 0) {
             LC_LOGE("audio_to_pcm av_parser_parse2 failed ret=%d", ret);
@@ -401,7 +470,27 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
             continue;
         }
 
+        packet->stream_index = stream_index;
+        packet->pos = static_cast<int64_t>((parse_data - padded_audio_data) - packet->size);
+        trace_parser_packet("before-make-refcounted", packet, parse_data, parse_bytes_remaining);
+
+        ret = av_packet_make_refcounted(packet);
+        {
+            char probe_buffer[128];
+            int probe_len = std::snprintf(probe_buffer, sizeof(probe_buffer), "PROBE audio_to_pcm after make_refcounted ret=%d\n", ret);
+            if (probe_len > 0) {
+                lc_trace_buffer(probe_buffer, static_cast<size_t>(probe_len));
+            }
+        }
+        trace_parser_packet("after-make-refcounted", packet, parse_data, parse_bytes_remaining);
+        if (ret < 0) {
+            LC_LOGE("audio_to_pcm av_packet_make_refcounted failed ret=%d", ret);
+            result = LAGRANGECODEC_ERROR_DECODE_FAILED;
+            goto cleanup;
+        }
+
         LC_TRACE_POINT("PROBE audio_to_pcm before send_packet");
+        trace_parser_packet("before-send-packet", packet, parse_data, parse_bytes_remaining);
         ret = avcodec_send_packet(decoder_ctx, packet);
         {
             char probe_buffer[128];
@@ -410,6 +499,7 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
                 lc_trace_buffer(probe_buffer, static_cast<size_t>(probe_len));
             }
         }
+        trace_parser_packet("after-send-packet", packet, parse_data, parse_bytes_remaining);
         av_packet_unref(packet);
         if (ret < 0) {
             LC_LOGE("audio_to_pcm avcodec_send_packet failed ret=%d", ret);
@@ -565,6 +655,7 @@ cleanup:
     LC_TRACE_POINT("TRACE audio_to_pcm:cleanup");
     LC_LOGI("audio_to_pcm cleanup result=%d format_context=%p decoder_ctx=%p packet=%p frame=%p swr=%p", result, format_context, decoder_ctx, packet, frame, swr_context);
     av_parser_close(parser);
+    av_freep(&padded_audio_data);
     swr_free(&swr_context);
     av_frame_free(&frame);
     av_packet_free(&packet);
