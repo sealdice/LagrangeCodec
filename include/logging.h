@@ -17,8 +17,7 @@
 #  define LAGRANGECODEC_LOG_TAG "LagrangeCodec"
 
 inline void lc_android_file_log(const char* buffer, size_t total_len) {
-    const char* configured = getenv("LAGRANGECODEC_LOG_FILE");
-    const char* primary = (configured && configured[0] != '\0') ? configured : "/data/local/tmp/lagrangecodec-native.log";
+    const char* primary = "/data/local/tmp/lagrangecodec-native.log";
     const char* fallback = "./lagrangecodec-native.log";
 
     int fd = open(primary, O_CREAT | O_WRONLY | O_APPEND, 0644);
