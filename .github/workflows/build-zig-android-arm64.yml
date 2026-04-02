@@ -153,16 +153,22 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: zig-android-build-log
-          path: build-zig-android.log
+          path: |
+            build-zig-android.log
+            build-zig-android/CMakeFiles/CMakeError.log
+            build-zig-android/CMakeFiles/CMakeOutput.log
 
       - name: Stop if Zig Android build failed
         if: steps.build_android.outcome == 'failure'
         run: |
-          if [ -f build-zig-android.log ]; then
-            tail -n 80 build-zig-android.log | while IFS= read -r line; do
-              echo "::error file=.github/workflows/build-zig-android-arm64.yml,line=1::$line"
-            done
-          fi
+          for log_file in build-zig-android.log build-zig-android/CMakeFiles/CMakeError.log build-zig-android/CMakeFiles/CMakeOutput.log; do
+            if [ -f "$log_file" ]; then
+              echo "::error file=.github/workflows/build-zig-android-arm64.yml,line=1::===== ${log_file} ====="
+              sed -n '1,200p' "$log_file" | while IFS= read -r line; do
+                echo "::error file=.github/workflows/build-zig-android-arm64.yml,line=1::${line}"
+              done
+            fi
+          done
           echo 'Build LagrangeCodec Zig Android static bundle failed'
           exit 1
 
