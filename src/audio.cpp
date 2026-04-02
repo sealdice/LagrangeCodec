@@ -320,7 +320,20 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
         goto cleanup;
     }
 
-    decoder = avcodec_find_decoder(stream->codecpar->codec_id);
+    decoder = nullptr;
+#if defined(__ANDROID__)
+    if (stream->codecpar->codec_id == AV_CODEC_ID_MP3) {
+        decoder = avcodec_find_decoder_by_name("mp3float");
+        if (decoder) {
+            LC_TRACE_POINT("PROBE audio_to_pcm selected decoder mp3float");
+        } else {
+            LC_TRACE_POINT("PROBE audio_to_pcm mp3float unavailable, falling back");
+        }
+    }
+#endif
+    if (!decoder) {
+        decoder = avcodec_find_decoder(stream->codecpar->codec_id);
+    }
     if (!decoder) {
         LC_LOGE("ERROR: no decoder found codec_id=%d", stream->codecpar->codec_id);
         result = LAGRANGECODEC_ERROR_CODEC_NOT_FOUND;

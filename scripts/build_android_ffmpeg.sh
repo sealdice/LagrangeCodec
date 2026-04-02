@@ -163,6 +163,7 @@ pushd "${BUILD_DIR}" >/dev/null
   --enable-protocol=file \
   --enable-encoder=png \
   --enable-decoder=mp3 \
+  --enable-decoder=mp3float \
   --enable-decoder=aac \
   --enable-decoder=flac \
   --enable-decoder=vorbis \
