@@ -19,7 +19,7 @@ jobs:
       - name: Setup Zig
         uses: goto-bus-stop/setup-zig@v2
         with:
-          version: 0.14.1
+          version: 0.16.0-dev.2267+27e8d05ee
 
       - name: Build Zig Android deps
         id: build_zig_deps
