@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 set -euo pipefail
+set -x
 
 OUT_ROOT_INPUT="${1:?output root is required}"
 API="${ANDROID_PLATFORM:-21}"
@@ -72,15 +73,19 @@ rm -rf "${ZLIB_SRC_DIR}" "${ZLIB_BUILD_DIR}"
 mkdir -p "${ZLIB_SRC_DIR}" "${ZLIB_BUILD_DIR}"
 tar -xzf "${ZLIB_ARCHIVE}" -C "${ZLIB_SRC_DIR}" --strip-components=1
 
-pushd "${ZLIB_SRC_DIR}" >/dev/null
-CHOST="aarch64-linux-android" \
-CC="${BIN_DIR}/zig-cc" \
-AR="${BIN_DIR}/zig-ar" \
-RANLIB="${BIN_DIR}/zig-ranlib" \
-./configure --static --prefix="${PREFIX_DIR}"
-make -j"$(nproc 2>/dev/null || echo 4)"
-make install
-popd >/dev/null
+cmake -G Ninja \
+  -S "${ZLIB_SRC_DIR}" \
+  -B "${ZLIB_BUILD_DIR}" \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_SYSTEM_NAME=Linux \
+  -DCMAKE_C_COMPILER="${BIN_DIR}/zig-cc" \
+  -DCMAKE_AR="${BIN_DIR}/zig-ar" \
+  -DCMAKE_RANLIB="${BIN_DIR}/zig-ranlib" \
+  -DCMAKE_INSTALL_PREFIX="${PREFIX_DIR}" \
+  -DBUILD_SHARED_LIBS=OFF \
+  -DZLIB_BUILD_TESTING=OFF
+cmake --build "${ZLIB_BUILD_DIR}"
+cmake --install "${ZLIB_BUILD_DIR}"
 
 FFMPEG_ARCHIVE="${WORK_ROOT}/ffmpeg-n${FFMPEG_VERSION}.tar.gz"
 FFMPEG_SRC_DIR="${WORK_ROOT}/ffmpeg-src"
