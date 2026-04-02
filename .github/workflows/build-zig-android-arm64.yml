@@ -19,7 +19,7 @@ jobs:
       - name: Setup Zig
         run: |
           set -euo pipefail
-          ZIG_URL="https://ziglang.org/download/0.14.0/zig-linux-x86_64-0.14.0.tar.xz"
+          ZIG_URL="https://ziglang.org/download/0.14.1/zig-x86_64-linux-0.14.1.tar.xz"
           ZIG_DIR="$RUNNER_TEMP/zig"
           rm -rf "$ZIG_DIR"
           mkdir -p "$ZIG_DIR"
