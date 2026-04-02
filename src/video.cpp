@@ -303,12 +303,29 @@ EXPORT int video_get_size(uint8_t* video_data, int data_len, VideoInfo* info) {
     }
     LC_TRACE_POINT("TRACE video_get_size:after-open-input");
 
-    if (avformat_find_stream_info(format_context, nullptr) < 0) {
+    LC_TRACE_LITERAL("TRACE_LITERAL video_get_size before-find-stream-info");
+    write(STDOUT_FILENO, "PROBE video_get_size before avformat_find_stream_info\n", 50);
+    lc_android_file_log("PROBE video_get_size before avformat_find_stream_info\n", 50);
+
+    ret_code = avformat_find_stream_info(format_context, nullptr);
+    {
+        char probe_buffer[128];
+        int probe_len = std::snprintf(probe_buffer, sizeof(probe_buffer), "PROBE video_get_size after avformat_find_stream_info ret=%d\n", ret_code);
+        if (probe_len > 0) {
+            write(STDOUT_FILENO, probe_buffer, static_cast<size_t>(probe_len));
+            lc_android_file_log(probe_buffer, static_cast<size_t>(probe_len));
+        }
+    }
+    if (ret_code < 0) {
         LC_LOGE("video_get_size avformat_find_stream_info failed");
         result = LAGRANGECODEC_ERROR_STREAM_INFO_FAILED;
         goto cleanup;
     }
     LC_LOGI("video_get_size stream_count=%u duration=%lld", format_context->nb_streams, static_cast<long long>(format_context->duration));
+
+    LC_TRACE_LITERAL("TRACE_LITERAL video_get_size before-scan-streams");
+    write(STDOUT_FILENO, "PROBE video_get_size before scanning streams\n", 45);
+    lc_android_file_log("PROBE video_get_size before scanning streams\n", 45);
 
     for (unsigned int i = 0; i < format_context->nb_streams; i++) {
         if (format_context->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
