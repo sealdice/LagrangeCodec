@@ -105,8 +105,19 @@ if (LAGRANGECODEC_BUILD_SHARED)
 else()
     add_library(LagrangeCodec STATIC ${SOURCES})
     # Shims are only needed for static-link consumers.
-    file(GLOB SHIM_SOURCES CONFIGURE_DEPENDS "src/shim/*.c")
-    target_sources(LagrangeCodec PRIVATE ${SHIM_SOURCES})
+    set(SHIM_SOURCES "")
+    if (MINGW)
+        list(APPEND SHIM_SOURCES "${CMAKE_SOURCE_DIR}/src/shim/mingw_time_shim.c")
+    endif()
+    if (LINUX OR LAGRANGECODEC_TARGET_IS_ANDROID)
+        list(APPEND SHIM_SOURCES
+            "${CMAKE_SOURCE_DIR}/src/shim/linux_aarch64_atomic_shim.c"
+            "${CMAKE_SOURCE_DIR}/src/shim/linux_fcntl64_shim.c"
+        )
+    endif()
+    if (SHIM_SOURCES)
+        target_sources(LagrangeCodec PRIVATE ${SHIM_SOURCES})
+    endif()
 endif()
 
 if (WIN32 AND LAGRANGECODEC_BUILD_SHARED)
