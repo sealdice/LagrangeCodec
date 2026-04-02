@@ -55,7 +55,7 @@ jobs:
           sed -i 's|t\.cpu\.arch\.isX86()|switch (t.cpu.arch) { .x86, .x86_64 => true, else => false }|g' "$FFMPEG_ZIG_DIR/build.zig"
           cd "$FFMPEG_ZIG_DIR"
           "$ZIG_BIN" version
-          "$ZIG_BIN" build -Dtarget=aarch64-linux-android -Doptimize=ReleaseFast -p "$PREFIX_DIR" 2>&1 | tee "$GITHUB_WORKSPACE/build-zig-android-deps.log"
+          "$ZIG_BIN" build -Dtarget=aarch64-linux-android21 -Doptimize=ReleaseFast -p "$PREFIX_DIR" 2>&1 | tee "$GITHUB_WORKSPACE/build-zig-android-deps.log"
 
       - name: Summarize Zig deps log
         if: always()
@@ -104,8 +104,8 @@ jobs:
           AR_BIN="$(command -v llvm-ar || command -v ar)"
           RANLIB_BIN="$(command -v llvm-ranlib || command -v ranlib)"
           mkdir -p "$WRAPPER_DIR"
-          printf '%s\n' '#!/usr/bin/env bash' 'exec zig cc -target aarch64-linux-android -D__ANDROID_API__=21 -lc "$@"' > "$WRAPPER_DIR/zig-cc"
-          printf '%s\n' '#!/usr/bin/env bash' 'exec zig c++ -target aarch64-linux-android -D__ANDROID_API__=21 -lc "$@"' > "$WRAPPER_DIR/zig-cxx"
+          printf '%s\n' '#!/usr/bin/env bash' 'exec zig cc -target aarch64-linux-android21 -lc "$@"' > "$WRAPPER_DIR/zig-cc"
+          printf '%s\n' '#!/usr/bin/env bash' 'exec zig c++ -target aarch64-linux-android21 -lc "$@"' > "$WRAPPER_DIR/zig-cxx"
           chmod +x "$WRAPPER_DIR/zig-cc" "$WRAPPER_DIR/zig-cxx"
           echo "WRAPPER_DIR=$WRAPPER_DIR" >> "$GITHUB_ENV"
           echo "AR_BIN=$AR_BIN" >> "$GITHUB_ENV"
