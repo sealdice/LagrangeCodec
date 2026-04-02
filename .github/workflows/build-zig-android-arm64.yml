@@ -22,10 +22,47 @@ jobs:
           version: 0.13.0
 
       - name: Build Zig Android deps
+        id: build_zig_deps
+        continue-on-error: true
         run: |
           set -euo pipefail
           chmod +x scripts/build_zig_android_deps.sh
-          bash scripts/build_zig_android_deps.sh build-zig-android-deps
+          bash scripts/build_zig_android_deps.sh build-zig-android-deps 2>&1 | tee build-zig-android-deps.log
+
+      - name: Summarize Zig deps log
+        if: always()
+        run: |
+          set -euo pipefail
+          {
+            echo '## Build Zig Android deps'
+            if [ -f build-zig-android-deps.log ]; then
+              echo ''
+              echo '### First 120 lines'
+              echo '```text'
+              sed -n '1,120p' build-zig-android-deps.log
+              echo '```'
+              echo ''
+              echo '### Last 120 lines'
+              echo '```text'
+              tail -n 120 build-zig-android-deps.log
+              echo '```'
+            else
+              echo 'No build-zig-android-deps.log was produced.'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Zig deps log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zig-android-deps-log
+          path: build-zig-android-deps.log
+
+      - name: Stop if Zig deps failed
+        if: steps.build_zig_deps.outcome == 'failure'
+        run: |
+          echo "Build Zig Android deps failed"
+          exit 1
 
       - name: Prepare Zig compiler wrappers
         run: |
