@@ -48,6 +48,22 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
             (decoder_ctx->channel_layout != 0 ? decoder_ctx->channel_layout : av_get_default_channel_layout(input_channels));
         const auto input_sample_fmt = static_cast<AVSampleFormat>(decoded_frame->format);
 
+        {
+            char probe_buffer[192];
+            int probe_len = std::snprintf(
+                probe_buffer,
+                sizeof(probe_buffer),
+                "PROBE audio_to_pcm first frame sample_rate=%d channels=%d channel_layout=%lld format=%d\n",
+                input_sample_rate,
+                input_channels,
+                static_cast<long long>(input_channel_layout),
+                static_cast<int>(input_sample_fmt)
+            );
+            if (probe_len > 0) {
+                lc_trace_buffer(probe_buffer, static_cast<size_t>(probe_len));
+            }
+        }
+
         LC_LOGI(
             "audio_to_pcm ensure_swr_context frame sample_rate=%d channels=%d channel_layout=%lld sample_fmt=%d decoder_sample_rate=%d decoder_channels=%d decoder_layout=%lld",
             input_sample_rate,
@@ -87,7 +103,15 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
             return LAGRANGECODEC_ERROR_ALLOCATION_FAILED;
         }
 
+        LC_TRACE_POINT("PROBE audio_to_pcm before swr_init");
         const int init_ret = swr_init(swr_context);
+        {
+            char probe_buffer[128];
+            int probe_len = std::snprintf(probe_buffer, sizeof(probe_buffer), "PROBE audio_to_pcm after swr_init ret=%d\n", init_ret);
+            if (probe_len > 0) {
+                lc_trace_buffer(probe_buffer, static_cast<size_t>(probe_len));
+            }
+        }
         if (init_ret < 0) {
             char errbuf[AV_ERROR_MAX_STRING_SIZE] = {};
             av_strerror(init_ret, errbuf, sizeof(errbuf));
@@ -303,18 +327,11 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
         decoder_ctx->frame_size
     );
 
-    if (decoder_ctx->channel_layout == 0) {
-        decoder_ctx->channel_layout = av_get_default_channel_layout(decoder_ctx->channels);
-    }
-    LC_LOGD(
-        "DEBUG: Setting up decoder - sample format: %s, sample rate: %d Hz, "
-        "channels: %d \n",
-        av_get_sample_fmt_name(static_cast<AVSampleFormat>(stream->codecpar->format)),
-        stream->codecpar->sample_rate, stream->codecpar->channels);
-    LC_LOGI("audio_to_pcm decoder_ctx sample_rate=%d channels=%d channel_layout=%lld sample_fmt=%d", decoder_ctx->sample_rate, decoder_ctx->channels, static_cast<long long>(decoder_ctx->channel_layout), decoder_ctx->sample_fmt);
-
+    LC_TRACE_POINT("PROBE audio_to_pcm before packet_alloc");
     packet = av_packet_alloc();
+    LC_TRACE_POINT("PROBE audio_to_pcm after packet_alloc");
     frame = av_frame_alloc();
+    LC_TRACE_POINT("PROBE audio_to_pcm after frame_alloc");
     if (!packet || !frame) {
         result = LAGRANGECODEC_ERROR_ALLOCATION_FAILED;
         goto cleanup;
@@ -327,7 +344,15 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
             continue;
         }
 
+        LC_TRACE_POINT("PROBE audio_to_pcm before send_packet");
         ret = avcodec_send_packet(decoder_ctx, packet);
+        {
+            char probe_buffer[128];
+            int probe_len = std::snprintf(probe_buffer, sizeof(probe_buffer), "PROBE audio_to_pcm after send_packet ret=%d\n", ret);
+            if (probe_len > 0) {
+                lc_trace_buffer(probe_buffer, static_cast<size_t>(probe_len));
+            }
+        }
         av_packet_unref(packet);
         if (ret < 0) {
             LC_LOGE("audio_to_pcm avcodec_send_packet failed ret=%d", ret);
@@ -337,6 +362,13 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
 
         while (true) {
             ret = avcodec_receive_frame(decoder_ctx, frame);
+            {
+                char probe_buffer[128];
+                int probe_len = std::snprintf(probe_buffer, sizeof(probe_buffer), "PROBE audio_to_pcm after receive_frame ret=%d\n", ret);
+                if (probe_len > 0) {
+                    lc_trace_buffer(probe_buffer, static_cast<size_t>(probe_len));
+                }
+            }
             if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
                 LC_LOGI("audio_to_pcm receive_frame pause ret=%d", ret);
                 break;
