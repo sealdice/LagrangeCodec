@@ -94,6 +94,8 @@ EXPORT int video_first_frame(uint8_t* video_data, int data_len, uint8_t** out, i
     AVFormatContext* format_context = nullptr;
     AVCodecContext* codec_context = nullptr;
     const AVCodec* codec = nullptr;
+    const AVStream* video_stream = nullptr;
+    AVCodecParameters* video_codec_parameters = nullptr;
     AVFrame* frame = nullptr;
     AVFrame* rgb_frame = nullptr;
     AVPacket* packet = nullptr;
@@ -131,26 +133,39 @@ EXPORT int video_first_frame(uint8_t* video_data, int data_len, uint8_t** out, i
         goto cleanup;
     }
 
+#if defined(__ANDROID__)
+    LC_TRACE_LITERAL("TRACE_LITERAL video_first_frame skip-find-stream-info-android");
+    LC_TRACE_POINT("PROBE video_first_frame skipping avformat_find_stream_info on Android");
+#else
     if (avformat_find_stream_info(format_context, nullptr) < 0) {
         LC_LOGE("ERROR: failed to find stream info");
         result = LAGRANGECODEC_ERROR_STREAM_INFO_FAILED;
         goto cleanup;
     }
+#endif
     LC_LOGI("video_first_frame stream_count=%u", format_context->nb_streams);
 
-    for (unsigned int i = 0; i < format_context->nb_streams; i++) {
-        if (format_context->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
-            video_stream_index = i;
-            codec = avcodec_find_decoder(format_context->streams[i]->codecpar->codec_id);
-            break;
-        }
+    LC_TRACE_LITERAL("TRACE_LITERAL video_first_frame before-manual-stream-scan");
+    video_stream_index = find_first_stream_index(format_context, AVMEDIA_TYPE_VIDEO, &video_stream, &video_codec_parameters);
+
+    if (video_stream_index < 0) {
+        LC_LOGE("ERROR: no video stream found ret=%d", video_stream_index);
+        result = video_stream_index;
+        goto cleanup;
     }
 
-    if (video_stream_index == -1) {
-        LC_LOGE("ERROR: no video stream found");
+    if (!video_stream || !video_codec_parameters) {
+        LC_LOGE(
+            "video_first_frame invalid manual stream scan result=%d stream=%p codecpar=%p",
+            video_stream_index,
+            video_stream,
+            video_codec_parameters
+        );
         result = LAGRANGECODEC_ERROR_STREAM_NOT_FOUND;
         goto cleanup;
     }
+
+    codec = avcodec_find_decoder(video_codec_parameters->codec_id);
     LC_LOGI("video_first_frame selected stream_index=%d codec=%s", video_stream_index, codec && codec->name ? codec->name : "(null)");
 
     if (!codec) {
@@ -163,7 +178,7 @@ EXPORT int video_first_frame(uint8_t* video_data, int data_len, uint8_t** out, i
         result = LAGRANGECODEC_ERROR_ALLOCATION_FAILED;
         goto cleanup;
     }
-    ret_code = avcodec_parameters_to_context(codec_context, format_context->streams[video_stream_index]->codecpar);
+    ret_code = avcodec_parameters_to_context(codec_context, video_codec_parameters);
     if (ret_code < 0) {
         result = LAGRANGECODEC_ERROR_CODEC_OPEN_FAILED;
         goto cleanup;
@@ -303,17 +318,19 @@ EXPORT int video_get_size(uint8_t* video_data, int data_len, VideoInfo* info) {
     }
     LC_TRACE_POINT("TRACE video_get_size:after-open-input");
 
+#if defined(__ANDROID__)
+    LC_TRACE_LITERAL("TRACE_LITERAL video_get_size skip-find-stream-info-android");
+    LC_TRACE_POINT("PROBE video_get_size skipping avformat_find_stream_info on Android");
+#else
     LC_TRACE_LITERAL("TRACE_LITERAL video_get_size before-find-stream-info");
-    write(STDOUT_FILENO, "PROBE video_get_size before avformat_find_stream_info\n", 50);
-    lc_android_file_log("PROBE video_get_size before avformat_find_stream_info\n", 50);
+    LC_TRACE_POINT("PROBE video_get_size before avformat_find_stream_info");
 
     ret_code = avformat_find_stream_info(format_context, nullptr);
     {
         char probe_buffer[128];
         int probe_len = std::snprintf(probe_buffer, sizeof(probe_buffer), "PROBE video_get_size after avformat_find_stream_info ret=%d\n", ret_code);
         if (probe_len > 0) {
-            write(STDOUT_FILENO, probe_buffer, static_cast<size_t>(probe_len));
-            lc_android_file_log(probe_buffer, static_cast<size_t>(probe_len));
+            lc_trace_buffer(probe_buffer, static_cast<size_t>(probe_len));
         }
     }
     if (ret_code < 0) {
@@ -321,27 +338,27 @@ EXPORT int video_get_size(uint8_t* video_data, int data_len, VideoInfo* info) {
         result = LAGRANGECODEC_ERROR_STREAM_INFO_FAILED;
         goto cleanup;
     }
+#endif
     LC_LOGI("video_get_size stream_count=%u duration=%lld", format_context->nb_streams, static_cast<long long>(format_context->duration));
 
     LC_TRACE_LITERAL("TRACE_LITERAL video_get_size before-scan-streams");
-    write(STDOUT_FILENO, "PROBE video_get_size before scanning streams\n", 45);
-    lc_android_file_log("PROBE video_get_size before scanning streams\n", 45);
+    LC_TRACE_POINT("PROBE video_get_size before scanning streams");
 
-    for (unsigned int i = 0; i < format_context->nb_streams; i++) {
-        if (format_context->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
-            index = i;
-            codec_parameters = format_context->streams[i]->codecpar;
-            break;
-        }
+    index = find_first_stream_index(format_context, AVMEDIA_TYPE_VIDEO, nullptr, &codec_parameters);
+
+    if (index < 0) {
+        LC_LOGE("video_get_size no video stream found ret=%d", index);
+        result = index;
+        goto cleanup;
     }
 
-    if (index == -1) {
-        LC_LOGE("video_get_size no video stream found");
+    if (!codec_parameters) {
+        LC_LOGE("video_get_size invalid manual stream scan result=%d codecpar=%p", index, codec_parameters);
         result = LAGRANGECODEC_ERROR_STREAM_NOT_FOUND;
         goto cleanup;
     }
 
-    *info = { codec_parameters->width, codec_parameters->height, (format_context->duration / AV_TIME_BASE) };
+    *info = { codec_parameters->width, codec_parameters->height, (format_context->duration > 0 ? (format_context->duration / AV_TIME_BASE) : 0) };
     result = LAGRANGECODEC_OK;
     LC_LOGI("video_get_size success width=%d height=%d duration=%lld", info->width, info->height, static_cast<long long>(info->duration));
 

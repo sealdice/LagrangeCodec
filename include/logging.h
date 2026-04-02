@@ -31,6 +31,15 @@ inline void lc_android_file_log(const char* buffer, size_t total_len) {
     }
 }
 
+inline void lc_trace_buffer(const char* buffer, size_t total_len) {
+    if (!buffer || total_len == 0) {
+        return;
+    }
+
+    write(STDOUT_FILENO, buffer, total_len);
+    lc_android_file_log(buffer, total_len);
+}
+
 inline void lc_android_terminal_log(int priority, const char* level, const char* fmt, ...) {
     char buffer[3072];
     int prefix_len = std::snprintf(
@@ -70,8 +79,7 @@ inline void lc_android_terminal_log(int priority, const char* level, const char*
         total_len += footer_len;
     }
 
-    write(STDOUT_FILENO, buffer, total_len);
-    lc_android_file_log(buffer, total_len);
+    lc_trace_buffer(buffer, total_len);
     __android_log_write(priority, LAGRANGECODEC_LOG_TAG, buffer);
 }
 
@@ -89,20 +97,29 @@ inline void lc_android_trace_point(const char* message) {
         return;
     }
 
-    write(STDOUT_FILENO, message, len);
-    write(STDOUT_FILENO, "\n", 1);
-    lc_android_file_log(message, len);
-    lc_android_file_log("\n", 1);
+    lc_trace_buffer(message, len);
+    lc_trace_buffer("\n", 1);
 }
 
 #  define LC_TRACE_POINT(message_literal) lc_android_trace_point(message_literal)
 #  define LC_TRACE_LITERAL(message_literal) do { \
     static const char kTraceMessage[] = message_literal "\n"; \
-    write(STDOUT_FILENO, kTraceMessage, sizeof(kTraceMessage) - 1); \
-    lc_android_file_log(kTraceMessage, sizeof(kTraceMessage) - 1); \
+    lc_trace_buffer(kTraceMessage, sizeof(kTraceMessage) - 1); \
   } while (0)
 #else
 #  include <cstdio>
+
+inline void lc_android_file_log(const char*, size_t) {}
+
+inline void lc_trace_buffer(const char* buffer, size_t total_len) {
+    if (!buffer || total_len == 0) {
+        return;
+    }
+
+    std::fwrite(buffer, 1, total_len, stdout);
+    std::fflush(stdout);
+}
+
 #  define LC_LOGE(...) std::fprintf(stderr, __VA_ARGS__)
 #  define LC_LOGI(...) std::fprintf(stdout, __VA_ARGS__)
 #  define LC_LOGD(...) std::fprintf(stdout, __VA_ARGS__)

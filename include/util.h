@@ -204,4 +204,63 @@ inline int create_format_context(const uint8_t* data, int data_len, AVFormatCont
     return LAGRANGECODEC_OK;
 }
 
+inline int find_first_stream_index(
+    AVFormatContext* format_context,
+    AVMediaType media_type,
+    const AVStream** stream,
+    AVCodecParameters** codec_parameters
+) {
+    if (stream) {
+        *stream = nullptr;
+    }
+    if (codec_parameters) {
+        *codec_parameters = nullptr;
+    }
+
+    if (!format_context) {
+        LC_LOGE("find_first_stream_index invalid format_context");
+        return LAGRANGECODEC_ERROR_INVALID_ARGUMENT;
+    }
+
+    LC_LOGI(
+        "find_first_stream_index begin format_context=%p media_type=%d stream_count=%u",
+        format_context,
+        static_cast<int>(media_type),
+        format_context->nb_streams
+    );
+
+    for (unsigned int i = 0; i < format_context->nb_streams; ++i) {
+        AVStream* current_stream = format_context->streams[i];
+        AVCodecParameters* current_codec_parameters = current_stream ? current_stream->codecpar : nullptr;
+        const int current_type = current_codec_parameters ? static_cast<int>(current_codec_parameters->codec_type) : -1;
+        const int codec_id = current_codec_parameters ? static_cast<int>(current_codec_parameters->codec_id) : -1;
+
+        LC_LOGI(
+            "find_first_stream_index inspect index=%u stream=%p codecpar=%p type=%d codec_id=%d",
+            i,
+            current_stream,
+            current_codec_parameters,
+            current_type,
+            codec_id
+        );
+
+        if (!current_codec_parameters || current_codec_parameters->codec_type != media_type) {
+            continue;
+        }
+
+        if (stream) {
+            *stream = current_stream;
+        }
+        if (codec_parameters) {
+            *codec_parameters = current_codec_parameters;
+        }
+
+        LC_LOGI("find_first_stream_index selected index=%u media_type=%d", i, static_cast<int>(media_type));
+        return static_cast<int>(i);
+    }
+
+    LC_LOGE("find_first_stream_index no stream found media_type=%d", static_cast<int>(media_type));
+    return LAGRANGECODEC_ERROR_STREAM_NOT_FOUND;
+}
+
 #endif //LAGRANGECODEC_UTIL_H

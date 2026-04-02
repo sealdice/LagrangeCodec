@@ -108,17 +108,19 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
     LC_LOGI("audio_to_pcm avformat_open_input ok context=%p streams=%u", format_context, format_context ? format_context->nb_streams : 0);
     LC_TRACE_POINT("TRACE audio_to_pcm:after-open-input");
 
+#if defined(__ANDROID__)
+    LC_TRACE_LITERAL("TRACE_LITERAL audio_to_pcm skip-find-stream-info-android");
+    LC_TRACE_POINT("PROBE audio_to_pcm skipping avformat_find_stream_info on Android");
+#else
     LC_TRACE_LITERAL("TRACE_LITERAL audio_to_pcm before-find-stream-info");
-    write(STDOUT_FILENO, "PROBE audio_to_pcm before avformat_find_stream_info\n", 49);
-    lc_android_file_log("PROBE audio_to_pcm before avformat_find_stream_info\n", 49);
+    LC_TRACE_POINT("PROBE audio_to_pcm before avformat_find_stream_info");
 
     ret = avformat_find_stream_info(format_context, nullptr);
     {
         char probe_buffer[128];
         int probe_len = std::snprintf(probe_buffer, sizeof(probe_buffer), "PROBE audio_to_pcm after avformat_find_stream_info ret=%d\n", ret);
         if (probe_len > 0) {
-            write(STDOUT_FILENO, probe_buffer, static_cast<size_t>(probe_len));
-            lc_android_file_log(probe_buffer, static_cast<size_t>(probe_len));
+            lc_trace_buffer(probe_buffer, static_cast<size_t>(probe_len));
         }
     }
     if (ret < 0) {
@@ -126,10 +128,23 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
         result = LAGRANGECODEC_ERROR_STREAM_INFO_FAILED;
         goto cleanup;
     }
+#endif
 
+#if defined(__ANDROID__)
+    LC_TRACE_LITERAL("TRACE_LITERAL audio_to_pcm before-manual-stream-scan");
+    LC_TRACE_POINT("PROBE audio_to_pcm before manual audio stream scan");
+
+    stream_index = find_first_stream_index(format_context, AVMEDIA_TYPE_AUDIO, &stream, nullptr);
+    {
+        char probe_buffer[128];
+        int probe_len = std::snprintf(probe_buffer, sizeof(probe_buffer), "PROBE audio_to_pcm after manual audio stream scan ret=%d\n", stream_index);
+        if (probe_len > 0) {
+            lc_trace_buffer(probe_buffer, static_cast<size_t>(probe_len));
+        }
+    }
+#else
     LC_TRACE_LITERAL("TRACE_LITERAL audio_to_pcm before-find-best-stream");
-    write(STDOUT_FILENO, "PROBE audio_to_pcm before av_find_best_stream\n", 46);
-    lc_android_file_log("PROBE audio_to_pcm before av_find_best_stream\n", 46);
+    LC_TRACE_POINT("PROBE audio_to_pcm before av_find_best_stream");
 
     LC_LOGD("DEBUG: number of streams found: %d\n", format_context->nb_streams);
     stream_index = av_find_best_stream(format_context, AVMEDIA_TYPE_AUDIO, -1, -1, nullptr, 0);
@@ -137,10 +152,11 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
         char probe_buffer[128];
         int probe_len = std::snprintf(probe_buffer, sizeof(probe_buffer), "PROBE audio_to_pcm after av_find_best_stream ret=%d\n", stream_index);
         if (probe_len > 0) {
-            write(STDOUT_FILENO, probe_buffer, static_cast<size_t>(probe_len));
-            lc_android_file_log(probe_buffer, static_cast<size_t>(probe_len));
+            lc_trace_buffer(probe_buffer, static_cast<size_t>(probe_len));
         }
     }
+#endif
+
     if (stream_index < 0) {
         LC_LOGE("ERROR: no audio stream found ret=%d", stream_index);
         result = LAGRANGECODEC_ERROR_STREAM_NOT_FOUND;
@@ -148,7 +164,9 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
     }
     LC_LOGI("audio_to_pcm selected stream_index=%d", stream_index);
 
+#if !defined(__ANDROID__)
     stream = format_context->streams[stream_index];
+#endif
     if (!stream || !stream->codecpar) {
         LC_LOGE("audio_to_pcm invalid stream/codecpar stream=%p codecpar=%p", stream, stream ? stream->codecpar : nullptr);
         result = LAGRANGECODEC_ERROR_STREAM_NOT_FOUND;
