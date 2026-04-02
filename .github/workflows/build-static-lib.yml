@@ -325,15 +325,9 @@ jobs:
           WRAPPER_DIR="$RUNNER_TEMP/zig-android-bin"
           mkdir -p "$WRAPPER_DIR"
 
-          cat > "$WRAPPER_DIR/zig-cc" <<EOF
-#!/usr/bin/env bash
-exec zig cc -target aarch64-linux-android21 --sysroot="$SYSROOT" "$@"
-EOF
+          printf '%s\n' '#!/usr/bin/env bash' "exec zig cc -target aarch64-linux-android21 --sysroot=\"$SYSROOT\" \"\$@\"" > "$WRAPPER_DIR/zig-cc"
 
-          cat > "$WRAPPER_DIR/zig-cxx" <<EOF
-#!/usr/bin/env bash
-exec zig c++ -target aarch64-linux-android21 --sysroot="$SYSROOT" "$@"
-EOF
+          printf '%s\n' '#!/usr/bin/env bash' "exec zig c++ -target aarch64-linux-android21 --sysroot=\"$SYSROOT\" \"\$@\"" > "$WRAPPER_DIR/zig-cxx"
 
           chmod +x "$WRAPPER_DIR/zig-cc" "$WRAPPER_DIR/zig-cxx"
           echo "WRAPPER_DIR=$WRAPPER_DIR" >> "$GITHUB_ENV"
