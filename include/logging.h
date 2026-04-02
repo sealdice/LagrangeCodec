@@ -96,12 +96,18 @@ inline void lc_android_trace_point(const char* message) {
 }
 
 #  define LC_TRACE_POINT(message_literal) lc_android_trace_point(message_literal)
+#  define LC_TRACE_LITERAL(message_literal) do { \
+    static const char kTraceMessage[] = message_literal "\n"; \
+    write(STDOUT_FILENO, kTraceMessage, sizeof(kTraceMessage) - 1); \
+    lc_android_file_log(kTraceMessage, sizeof(kTraceMessage) - 1); \
+  } while (0)
 #else
 #  include <cstdio>
 #  define LC_LOGE(...) std::fprintf(stderr, __VA_ARGS__)
 #  define LC_LOGI(...) std::fprintf(stdout, __VA_ARGS__)
 #  define LC_LOGD(...) std::fprintf(stdout, __VA_ARGS__)
 #  define LC_TRACE_POINT(message_literal) do { std::fputs(message_literal, stdout); std::fputc('\n', stdout); } while (0)
+#  define LC_TRACE_LITERAL(message_literal) LC_TRACE_POINT(message_literal)
 #endif
 
 #endif // LAGRANGECODEC_LOGGING_H

@@ -14,6 +14,7 @@ extern "C" {
 }
 
 EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, void* userdata) {
+    LC_TRACE_LITERAL("TRACE_LITERAL audio_to_pcm enter");
     LC_TRACE_POINT("TRACE audio_to_pcm:enter");
     AVFormatContext* format_context = nullptr;
     AVCodecContext* decoder_ctx = nullptr;
