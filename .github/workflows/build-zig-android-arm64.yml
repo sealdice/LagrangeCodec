@@ -169,11 +169,9 @@ jobs:
               return 0
             fi
             local content
-            content="$(tail -n 120 "$log_file" || true)"
+            content="$(tail -n 120 "$log_file" | tr '"'"'\r\n'"'"' '"'"'  '"'"' | sed '"'"'s/  */ | /g'"'"' || true)"
             content="${content//'%'/'%25'}"
-            content="${content//$'"'"'\r'"'"'/'%0D'}"
-            content="${content//$'"'"'\n'"'"'/'%0A'}"
-            echo "::error file=.github/workflows/build-zig-android-arm64.yml,line=1::===== ${log_file} =====%0A${content}"
+            echo "::error file=.github/workflows/build-zig-android-arm64.yml,line=1::${log_file}: ${content}"
           }
           emit_github_error build-zig-android.log
           emit_github_error build-zig-android/CMakeFiles/CMakeError.log
