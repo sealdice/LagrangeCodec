@@ -17,9 +17,25 @@ jobs:
           sudo apt-get update && sudo apt install build-essential cmake ninja-build nasm curl python3 -y
 
       - name: Setup Zig
-        uses: goto-bus-stop/setup-zig@v2
-        with:
-          version: 0.16.0-dev.2267+27e8d05ee
+        run: |
+          set -euo pipefail
+          ZIG_URL="$(python3 - <<'PY'
+import json
+import urllib.request
+
+with urllib.request.urlopen('https://ziglang.org/download/index.json') as response:
+    data = json.load(response)
+
+print(data['master']['x86_64-linux']['tarball'])
+PY
+          )"
+          ZIG_DIR="$RUNNER_TEMP/zig"
+          rm -rf "$ZIG_DIR"
+          mkdir -p "$ZIG_DIR"
+          curl -L --fail "$ZIG_URL" -o "$RUNNER_TEMP/zig.tar.xz"
+          tar -xJf "$RUNNER_TEMP/zig.tar.xz" -C "$ZIG_DIR" --strip-components=1
+          echo "$ZIG_DIR" >> "$GITHUB_PATH"
+          "$ZIG_DIR/zig" version
 
       - name: Build Zig Android deps
         id: build_zig_deps
