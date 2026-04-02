@@ -5,10 +5,12 @@ set -x
 
 OUT_ROOT_INPUT="${1:?output root is required}"
 API="${ANDROID_PLATFORM:-21}"
-TARGET="aarch64-linux-android${API}"
+TARGET_TRIPLE="aarch64-linux-android"
 ZIG_BIN="${ZIG:-zig}"
 ZLIB_VERSION="${ZLIB_VERSION:-1.3.1}"
 FFMPEG_VERSION="${FFMPEG_VERSION:-5.0}"
+AR_BIN="$(command -v llvm-ar || command -v ar)"
+RANLIB_BIN="$(command -v llvm-ranlib || command -v ranlib || true)"
 
 mkdir -p "${OUT_ROOT_INPUT}"
 OUT_ROOT="$(cd "${OUT_ROOT_INPUT}" && pwd)"
@@ -36,22 +38,22 @@ download_with_fallbacks() {
 
 cat > "${BIN_DIR}/zig-cc" <<EOF
 #!/usr/bin/env bash
-exec "${ZIG_BIN}" cc -target ${TARGET} "\$@"
+exec "${ZIG_BIN}" cc -target ${TARGET_TRIPLE} -D__ANDROID_API__=${API} "\$@"
 EOF
 
 cat > "${BIN_DIR}/zig-cxx" <<EOF
 #!/usr/bin/env bash
-exec "${ZIG_BIN}" c++ -target ${TARGET} "\$@"
+exec "${ZIG_BIN}" c++ -target ${TARGET_TRIPLE} -D__ANDROID_API__=${API} "\$@"
 EOF
 
 cat > "${BIN_DIR}/zig-ar" <<EOF
 #!/usr/bin/env bash
-exec "${ZIG_BIN}" ar "\$@"
+exec "${AR_BIN}" "\$@"
 EOF
 
 cat > "${BIN_DIR}/zig-ranlib" <<EOF
 #!/usr/bin/env bash
-exec "${ZIG_BIN}" ranlib "\$@"
+exec "${RANLIB_BIN}" "\$@"
 EOF
 
 chmod +x "${BIN_DIR}/zig-cc" "${BIN_DIR}/zig-cxx" "${BIN_DIR}/zig-ar" "${BIN_DIR}/zig-ranlib"
@@ -95,7 +97,6 @@ ZLIB_SOURCES=(
 
 for src in "${ZLIB_SOURCES[@]}"; do
   "${BIN_DIR}/zig-cc" \
-    -target "${TARGET}" \
     -O3 \
     -fPIC \
     -I"${ZLIB_SRC_DIR}" \

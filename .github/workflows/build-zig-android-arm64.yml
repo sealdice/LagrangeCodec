@@ -31,13 +31,15 @@ jobs:
         run: |
           set -euo pipefail
           WRAPPER_DIR="$RUNNER_TEMP/zig-android-bin"
+          AR_BIN="$(command -v llvm-ar || command -v ar)"
+          RANLIB_BIN="$(command -v llvm-ranlib || command -v ranlib)"
           mkdir -p "$WRAPPER_DIR"
-          printf '%s\n' '#!/usr/bin/env bash' 'exec zig cc -target aarch64-linux-android21 "$@"' > "$WRAPPER_DIR/zig-cc"
-          printf '%s\n' '#!/usr/bin/env bash' 'exec zig c++ -target aarch64-linux-android21 "$@"' > "$WRAPPER_DIR/zig-cxx"
-          printf '%s\n' '#!/usr/bin/env bash' 'exec zig ar "$@"' > "$WRAPPER_DIR/zig-ar"
-          printf '%s\n' '#!/usr/bin/env bash' 'exec zig ranlib "$@"' > "$WRAPPER_DIR/zig-ranlib"
-          chmod +x "$WRAPPER_DIR/zig-cc" "$WRAPPER_DIR/zig-cxx" "$WRAPPER_DIR/zig-ar" "$WRAPPER_DIR/zig-ranlib"
+          printf '%s\n' '#!/usr/bin/env bash' 'exec zig cc -target aarch64-linux-android -D__ANDROID_API__=21 "$@"' > "$WRAPPER_DIR/zig-cc"
+          printf '%s\n' '#!/usr/bin/env bash' 'exec zig c++ -target aarch64-linux-android -D__ANDROID_API__=21 "$@"' > "$WRAPPER_DIR/zig-cxx"
+          chmod +x "$WRAPPER_DIR/zig-cc" "$WRAPPER_DIR/zig-cxx"
           echo "WRAPPER_DIR=$WRAPPER_DIR" >> "$GITHUB_ENV"
+          echo "AR_BIN=$AR_BIN" >> "$GITHUB_ENV"
+          echo "RANLIB_BIN=$RANLIB_BIN" >> "$GITHUB_ENV"
 
       - name: Build LagrangeCodec Zig Android static bundle
         run: |
@@ -50,8 +52,8 @@ jobs:
             -DCMAKE_SYSTEM_NAME=Linux \
             -DCMAKE_C_COMPILER="$WRAPPER_DIR/zig-cc" \
             -DCMAKE_CXX_COMPILER="$WRAPPER_DIR/zig-cxx" \
-            -DCMAKE_AR="$WRAPPER_DIR/zig-ar" \
-            -DCMAKE_RANLIB="$WRAPPER_DIR/zig-ranlib" \
+            -DCMAKE_AR="$AR_BIN" \
+            -DCMAKE_RANLIB="$RANLIB_BIN" \
             -DBUILD_TESTING=OFF \
             -DLAGRANGECODEC_BUILD_SHARED=OFF \
             -DLAGRANGECODEC_BUILD_ANDROID_RUNTIME_SMOKE=ON \
