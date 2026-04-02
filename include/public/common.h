@@ -43,4 +43,6 @@ typedef void (*cb_codec)(void* userdata, const uint8_t* p, int len);
 
 #define EXPORT extern "C" LAGRANGECODEC_API
 
+EXPORT const char* lagrangecodec_build_marker(void);
+
 #endif //COMMON_H

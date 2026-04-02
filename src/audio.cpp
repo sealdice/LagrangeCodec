@@ -11,9 +11,12 @@ extern "C" {
 #include <libavutil/channel_layout.h>
 #include <libavutil/samplefmt.h>
 #include <libswresample/swresample.h>
+
+void lc_probe_audio_to_pcm_entry(void);
 }
 
 EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, void* userdata) {
+    lc_probe_audio_to_pcm_entry();
     LC_TRACE_LITERAL("TRACE_LITERAL audio_to_pcm enter");
     LC_TRACE_POINT("TRACE audio_to_pcm:enter");
     AVFormatContext* format_context = nullptr;

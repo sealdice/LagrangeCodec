@@ -7,6 +7,9 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavutil/imgutils.h>
 #include <libswscale/swscale.h>
+
+void lc_probe_video_first_frame_entry(void);
+void lc_probe_video_get_size_entry(void);
 }
 
 #include "util.h"
@@ -86,6 +89,7 @@ int save_frame_as_png(AVFrame* frame, int width, int height, uint8_t** out, int*
 }
 
 EXPORT int video_first_frame(uint8_t* video_data, int data_len, uint8_t** out, int* out_len) {
+    lc_probe_video_first_frame_entry();
     LC_TRACE_LITERAL("TRACE_LITERAL video_first_frame enter");
     AVFormatContext* format_context = nullptr;
     AVCodecContext* codec_context = nullptr;
@@ -266,6 +270,7 @@ cleanup:
 }
 
 EXPORT int video_get_size(uint8_t* video_data, int data_len, VideoInfo* info) {
+    lc_probe_video_get_size_entry();
     LC_TRACE_LITERAL("TRACE_LITERAL video_get_size enter");
     LC_TRACE_POINT("TRACE video_get_size:enter");
     AVFormatContext* format_context = nullptr;
