@@ -73,19 +73,41 @@ rm -rf "${ZLIB_SRC_DIR}" "${ZLIB_BUILD_DIR}"
 mkdir -p "${ZLIB_SRC_DIR}" "${ZLIB_BUILD_DIR}"
 tar -xzf "${ZLIB_ARCHIVE}" -C "${ZLIB_SRC_DIR}" --strip-components=1
 
-cmake -G Ninja \
-  -S "${ZLIB_SRC_DIR}" \
-  -B "${ZLIB_BUILD_DIR}" \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_SYSTEM_NAME=Linux \
-  -DCMAKE_C_COMPILER="${BIN_DIR}/zig-cc" \
-  -DCMAKE_AR="${BIN_DIR}/zig-ar" \
-  -DCMAKE_RANLIB="${BIN_DIR}/zig-ranlib" \
-  -DCMAKE_INSTALL_PREFIX="${PREFIX_DIR}" \
-  -DBUILD_SHARED_LIBS=OFF \
-  -DZLIB_BUILD_TESTING=OFF
-cmake --build "${ZLIB_BUILD_DIR}"
-cmake --install "${ZLIB_BUILD_DIR}"
+mkdir -p "${PREFIX_DIR}/include" "${PREFIX_DIR}/lib"
+
+ZLIB_SOURCES=(
+  adler32.c
+  compress.c
+  crc32.c
+  deflate.c
+  gzclose.c
+  gzlib.c
+  gzread.c
+  gzwrite.c
+  inflate.c
+  infback.c
+  inftrees.c
+  inffast.c
+  trees.c
+  uncompr.c
+  zutil.c
+)
+
+for src in "${ZLIB_SOURCES[@]}"; do
+  "${BIN_DIR}/zig-cc" \
+    -target "${TARGET}" \
+    -O3 \
+    -fPIC \
+    -I"${ZLIB_SRC_DIR}" \
+    -c "${ZLIB_SRC_DIR}/${src}" \
+    -o "${ZLIB_BUILD_DIR}/${src%.c}.o"
+done
+
+"${BIN_DIR}/zig-ar" rcs "${PREFIX_DIR}/lib/libz.a" "${ZLIB_BUILD_DIR}"/*.o
+"${BIN_DIR}/zig-ranlib" "${PREFIX_DIR}/lib/libz.a"
+
+cp -f "${ZLIB_SRC_DIR}/zlib.h" "${PREFIX_DIR}/include/"
+cp -f "${ZLIB_SRC_DIR}/zconf.h" "${PREFIX_DIR}/include/"
 
 FFMPEG_ARCHIVE="${WORK_ROOT}/ffmpeg-n${FFMPEG_VERSION}.tar.gz"
 FFMPEG_SRC_DIR="${WORK_ROOT}/ffmpeg-src"
