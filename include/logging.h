@@ -78,11 +78,30 @@ inline void lc_android_terminal_log(int priority, const char* level, const char*
 #  define LC_LOGE(...) lc_android_terminal_log(ANDROID_LOG_ERROR, "ERR", __VA_ARGS__)
 #  define LC_LOGI(...) lc_android_terminal_log(ANDROID_LOG_INFO, "INF", __VA_ARGS__)
 #  define LC_LOGD(...) lc_android_terminal_log(ANDROID_LOG_DEBUG, "DBG", __VA_ARGS__)
+
+inline void lc_android_trace_point(const char* message) {
+    if (!message) {
+        return;
+    }
+
+    const size_t len = ::strlen(message);
+    if (len == 0) {
+        return;
+    }
+
+    write(STDOUT_FILENO, message, len);
+    write(STDOUT_FILENO, "\n", 1);
+    lc_android_file_log(message, len);
+    lc_android_file_log("\n", 1);
+}
+
+#  define LC_TRACE_POINT(message_literal) lc_android_trace_point(message_literal)
 #else
 #  include <cstdio>
 #  define LC_LOGE(...) std::fprintf(stderr, __VA_ARGS__)
 #  define LC_LOGI(...) std::fprintf(stdout, __VA_ARGS__)
 #  define LC_LOGD(...) std::fprintf(stdout, __VA_ARGS__)
+#  define LC_TRACE_POINT(message_literal) do { std::fputs(message_literal, stdout); std::fputc('\n', stdout); } while (0)
 #endif
 
 #endif // LAGRANGECODEC_LOGGING_H

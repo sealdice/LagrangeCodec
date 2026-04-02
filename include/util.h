@@ -132,6 +132,7 @@ inline void destroy_format_context(AVFormatContext** format_context) {
 }
 
 inline int create_format_context(const uint8_t* data, int data_len, AVFormatContext** format_context) {
+    LC_TRACE_POINT("TRACE create_format_context:enter");
     if (!format_context || !data || data_len <= 0) {
         LC_LOGE("create_format_context invalid args format_context=%p data=%p len=%d", format_context, data, data_len);
         return LAGRANGECODEC_ERROR_INVALID_ARGUMENT;
@@ -156,6 +157,7 @@ inline int create_format_context(const uint8_t* data, int data_len, AVFormatCont
     input->position = 0;
     input->read_calls = 0;
     input->seek_calls = 0;
+    LC_TRACE_POINT("TRACE create_format_context:copied-input");
     LC_LOGI("create_format_context copied input size=%d input=%p", data_len, input);
 
     uint8_t* avio_buffer = static_cast<uint8_t*>(av_malloc(kAvioBufferSize));
@@ -182,6 +184,7 @@ inline int create_format_context(const uint8_t* data, int data_len, AVFormatCont
         LC_LOGE("ERROR: failed to create AVIOContext\n");
         return LAGRANGECODEC_ERROR_ALLOCATION_FAILED;
     }
+    LC_TRACE_POINT("TRACE create_format_context:avio-created");
 
     AVFormatContext* context = avformat_alloc_context();
     if (!context) {
@@ -195,6 +198,7 @@ inline int create_format_context(const uint8_t* data, int data_len, AVFormatCont
     context->pb = avio_ctx;
     context->flags |= AVFMT_FLAG_CUSTOM_IO;
     avio_ctx->seekable = AVIO_SEEKABLE_NORMAL;
+    LC_TRACE_POINT("TRACE create_format_context:success");
     LC_LOGI("create_format_context success context=%p avio=%p opaque=%p", context, avio_ctx, input);
     *format_context = context;
     return LAGRANGECODEC_OK;

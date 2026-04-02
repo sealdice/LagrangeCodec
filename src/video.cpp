@@ -265,6 +265,7 @@ cleanup:
 }
 
 EXPORT int video_get_size(uint8_t* video_data, int data_len, VideoInfo* info) {
+    LC_TRACE_POINT("TRACE video_get_size:enter");
     AVFormatContext* format_context = nullptr;
     AVCodecParameters* codec_parameters = nullptr;
     int result = LAGRANGECODEC_ERROR_DECODE_FAILED;
@@ -279,6 +280,7 @@ EXPORT int video_get_size(uint8_t* video_data, int data_len, VideoInfo* info) {
         return LAGRANGECODEC_ERROR_INVALID_ARGUMENT;
     }
 
+    LC_TRACE_POINT("TRACE video_get_size:before-create-format-context");
     LC_LOGI("video_get_size enter data=%p len=%d", video_data, data_len);
 
     int ret_code = create_format_context(video_data, data_len, &format_context);
@@ -292,6 +294,7 @@ EXPORT int video_get_size(uint8_t* video_data, int data_len, VideoInfo* info) {
         result = LAGRANGECODEC_ERROR_OPEN_INPUT_FAILED;
         goto cleanup;
     }
+    LC_TRACE_POINT("TRACE video_get_size:after-open-input");
 
     if (avformat_find_stream_info(format_context, nullptr) < 0) {
         LC_LOGE("video_get_size avformat_find_stream_info failed");
@@ -319,6 +322,7 @@ EXPORT int video_get_size(uint8_t* video_data, int data_len, VideoInfo* info) {
     LC_LOGI("video_get_size success width=%d height=%d duration=%lld", info->width, info->height, static_cast<long long>(info->duration));
 
 cleanup:
+    LC_TRACE_POINT("TRACE video_get_size:cleanup");
     LC_LOGI("video_get_size cleanup result=%d format_context=%p index=%d codec_parameters=%p", result, format_context, index, codec_parameters);
     destroy_format_context(&format_context);
     LC_LOGI("video_get_size cleanup done result=%d", result);

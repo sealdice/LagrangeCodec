@@ -14,6 +14,7 @@ extern "C" {
 }
 
 EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, void* userdata) {
+    LC_TRACE_POINT("TRACE audio_to_pcm:enter");
     AVFormatContext* format_context = nullptr;
     AVCodecContext* decoder_ctx = nullptr;
     const AVStream* stream = nullptr;
@@ -84,12 +85,15 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
         return LAGRANGECODEC_ERROR_INVALID_ARGUMENT;
     }
 
+    LC_TRACE_POINT("TRACE audio_to_pcm:before-create-format-context");
     LC_LOGI("audio_to_pcm enter data=%p len=%d callback=%p userdata=%p", audio_data, data_len, callback, userdata);
 
     if (create_format_context(audio_data, data_len, &format_context) != LAGRANGECODEC_OK) {
         LC_LOGE("ERROR: failed to create format context\n");
         return LAGRANGECODEC_ERROR_ALLOCATION_FAILED;
     }
+
+    LC_TRACE_POINT("TRACE audio_to_pcm:before-open-input");
 
     ret = avformat_open_input(&format_context, nullptr, nullptr, nullptr);
     if (ret < 0) {
@@ -98,6 +102,7 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
         goto cleanup;
     }
     LC_LOGI("audio_to_pcm avformat_open_input ok context=%p streams=%u", format_context, format_context ? format_context->nb_streams : 0);
+    LC_TRACE_POINT("TRACE audio_to_pcm:after-open-input");
 
     ret = avformat_find_stream_info(format_context, nullptr);
     if (ret < 0) {
@@ -273,6 +278,7 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
     LC_LOGI("audio_to_pcm exit result=%d produced_pcm=%d", result, produced_pcm ? 1 : 0);
 
 cleanup:
+    LC_TRACE_POINT("TRACE audio_to_pcm:cleanup");
     LC_LOGI("audio_to_pcm cleanup result=%d format_context=%p decoder_ctx=%p packet=%p frame=%p swr=%p", result, format_context, decoder_ctx, packet, frame, swr_context);
     swr_free(&swr_context);
     av_frame_free(&frame);
