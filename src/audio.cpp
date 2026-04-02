@@ -32,6 +32,8 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
     int stream_index = -1;
     bool produced_pcm = false;
     bool used_android_parser = false;
+    const uint8_t* parse_data = nullptr;
+    int parse_bytes_remaining = 0;
 
     auto ensure_swr_context = [&](AVFrame* decoded_frame) -> int {
         if (swr_context) {
@@ -355,8 +357,8 @@ EXPORT int audio_to_pcm(uint8_t* audio_data, int data_len, cb_codec callback, vo
     }
     used_android_parser = true;
 
-    const uint8_t* parse_data = audio_data;
-    int parse_bytes_remaining = data_len;
+    parse_data = audio_data;
+    parse_bytes_remaining = data_len;
     while (parse_bytes_remaining > 0) {
         packet->data = nullptr;
         packet->size = 0;
