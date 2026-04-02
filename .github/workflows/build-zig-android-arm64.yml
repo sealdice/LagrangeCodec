@@ -65,6 +65,11 @@ jobs:
       - name: Stop if Zig deps failed
         if: steps.build_zig_deps.outcome == 'failure'
         run: |
+          if [ -f build-zig-android-deps.log ]; then
+            tail -n 60 build-zig-android-deps.log | while IFS= read -r line; do
+              echo "::error file=.github/workflows/build-zig-android-arm64.yml,line=1::${line}"
+            done
+          fi
           echo "Build Zig Android deps failed"
           exit 1
 
