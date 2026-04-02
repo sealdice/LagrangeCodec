@@ -38,12 +38,12 @@ download_with_fallbacks() {
 
 cat > "${BIN_DIR}/zig-cc" <<EOF
 #!/usr/bin/env bash
-exec "${ZIG_BIN}" cc -target ${TARGET_TRIPLE} -D__ANDROID_API__=${API} "\$@"
+exec "${ZIG_BIN}" cc -target ${TARGET_TRIPLE} -D__ANDROID_API__=${API} -lc "\$@"
 EOF
 
 cat > "${BIN_DIR}/zig-cxx" <<EOF
 #!/usr/bin/env bash
-exec "${ZIG_BIN}" c++ -target ${TARGET_TRIPLE} -D__ANDROID_API__=${API} "\$@"
+exec "${ZIG_BIN}" c++ -target ${TARGET_TRIPLE} -D__ANDROID_API__=${API} -lc "\$@"
 EOF
 
 cat > "${BIN_DIR}/zig-ar" <<EOF
