@@ -101,6 +101,8 @@ jobs:
           echo "RANLIB_BIN=$RANLIB_BIN" >> "$GITHUB_ENV"
 
       - name: Build LagrangeCodec Zig Android static bundle
+        id: build_android
+        continue-on-error: true
         run: |
           set -euo pipefail
           PREFIX_DIR="$GITHUB_WORKSPACE/build-zig-android-deps/prefix"
@@ -120,8 +122,49 @@ jobs:
             -DBUILD_TESTING=OFF \
             -DLAGRANGECODEC_BUILD_SHARED=OFF \
             -DLAGRANGECODEC_BUILD_ANDROID_RUNTIME_SMOKE=ON \
-            -DLAGRANGECODEC_NATIVE_PREFIX="$PREFIX_DIR"
-          cmake --build build-zig-android --verbose
+            -DLAGRANGECODEC_NATIVE_PREFIX="$PREFIX_DIR" \
+            2>&1 | tee build-zig-android.log
+          cmake --build build-zig-android --verbose 2>&1 | tee -a build-zig-android.log
+
+      - name: Summarize Zig Android build log
+        if: always()
+        run: |
+          set -euo pipefail
+          {
+            echo '## Build LagrangeCodec Zig Android static bundle'
+            if [ -f build-zig-android.log ]; then
+              echo ''
+              echo '### First 120 lines'
+              echo '```text'
+              sed -n '1,120p' build-zig-android.log
+              echo '```'
+              echo ''
+              echo '### Last 120 lines'
+              echo '```text'
+              tail -n 120 build-zig-android.log
+              echo '```'
+            else
+              echo 'No build-zig-android.log was produced.'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Zig Android build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zig-android-build-log
+          path: build-zig-android.log
+
+      - name: Stop if Zig Android build failed
+        if: steps.build_android.outcome == 'failure'
+        run: |
+          if [ -f build-zig-android.log ]; then
+            tail -n 80 build-zig-android.log | while IFS= read -r line; do
+              echo "::error file=.github/workflows/build-zig-android-arm64.yml,line=1::$line"
+            done
+          fi
+          echo 'Build LagrangeCodec Zig Android static bundle failed'
+          exit 1
 
       - name: Verify Android smoke binary
         run: |
